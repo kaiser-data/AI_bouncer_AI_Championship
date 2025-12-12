@@ -721,6 +721,13 @@ app.get('/bouncer', (req, res) => {
 // Speech-to-Text endpoint - Convert user voice to text
 app.post('/stt', upload.single('audio'), async (req, res) => {
   console.log('Received /stt request');
+  if (!process.env.ELEVENLABS_API_KEY) {
+    console.error('STT Error: ELEVENLABS_API_KEY is not set on the server.');
+    return res.status(500).json({
+      error: 'Configuration error',
+      message: 'The speech-to-text service is not configured on the server.',
+    });
+  }
   try {
     if (!req.file) {
       console.log('No audio file provided in /stt request');

@@ -1264,11 +1264,7 @@
         if (!response.ok) {
           const errorText = await response.text();
           console.error('STT server error response:', errorText);
-          let errorJson = {};
-          try {
-            errorJson = JSON.parse(errorText);
-          } catch(e) { /* not json */ }
-          throw new Error(`${errorJson.message || 'Unknown server error.'} --- Details: ${errorJson.details || 'No details.'}`);
+          throw new Error(errorText || 'Unknown server error.');
         }
 
         const data = await response.json();
