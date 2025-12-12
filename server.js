@@ -7,6 +7,8 @@ import {
   GetObjectCommand,
   PutObjectCommand
 } from '@aws-sdk/client-s3';
+import multer from 'multer';
+import { ElevenLabsClient } from '@elevenlabs/elevenlabs-js';
 
 config();
 
@@ -31,6 +33,35 @@ const s3Client = new S3Client({
 
 const BUCKET_NAME = process.env.VULTR_BUCKET_NAME || 'vip-list-bucket';
 const VIP_LIST_KEY = 'vip_list.json';
+
+// ElevenLabs Client Configuration
+const elevenLabsClient = new ElevenLabsClient({
+  apiKey: process.env.ELEVENLABS_API_KEY
+});
+
+// Voice ID mapping for each bouncer personality
+const VOICE_MAP = {
+  'Viktor': 'pNInz6obpgDQGcFmaJgB',       // Antoni - deep, well-rounded
+  'Zen-9': 'AZnzlk1XvdvUeBnXmlld',        // Domi - calm, soothing
+  'Maximus': 'ErXwobaYiN019PkySvjV',      // Callum - theatrical, expressive
+  'S.A.R.C.': 'EXAVITQu4vr4xnSDxMaL',     // Jessie - sharp, confident
+  'Unit-7': '21m00Tcm4TlvDq8ikWAM'        // Josh - tired, low-energy
+};
+
+// Multer configuration for audio upload
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: 10 * 1024 * 1024 // 10MB limit
+  },
+  fileFilter: (req, file, cb) => {
+    if (file.mimetype.startsWith('audio/') || file.mimetype.startsWith('video/webm')) {
+      cb(null, true);
+    } else {
+      cb(new Error('Only audio files are allowed'));
+    }
+  }
+});
 
 // Bouncer personality modes - randomly selected or based on time
 const BOUNCER_PERSONALITIES = {
@@ -80,12 +111,17 @@ function getBouncerPersonality() {
   return BOUNCER_PERSONALITIES[personalities[Math.floor(Math.random() * personalities.length)]];
 }
 
-// Bouncer System Prompt - Dynamic based on attempt count and personality
-function getBouncerPrompt(attempts, personality) {
+// Bouncer System Prompt - Dynamic based on attempt count, personality, and memory
+function getBouncerPrompt(attempts, personality, session) {
+  const { conversationHistory, playerProfile, bouncerContext } = session;
+
   let moodHint = '';
   let extraRules = '';
 
-  if (attempts >= 7) {
+  if (attempts >= 10) {
+    moodHint = "You're genuinely impressed by their persistence. Your responses become slightly warmer, with hints of respect creeping in.";
+    extraRules = "\n7. You're ready to give them a real hint now.";
+  } else if (attempts >= 7) {
     moodHint = "You're starting to feel a tiny bit of respect for their persistence. Maybe drop a hint about what impresses you.";
     extraRules = "\n7. Since they've tried 7+ times, you can hint that you appreciate good humor or that there might be a 'magic word' related to the club.";
   } else if (attempts >= 5) {
@@ -96,24 +132,63 @@ function getBouncerPrompt(attempts, personality) {
     extraRules = "\n7. You can hint that humor goes a long way in this club.";
   }
 
+  // Build conversation summary for context
+  let conversationSummary = '';
+  if (conversationHistory.length > 2) {
+    const recentExchanges = conversationHistory.slice(-6); // Last 3 exchanges
+    conversationSummary = `\nCONVERSATION SO FAR (last ${recentExchanges.length / 2} exchanges):\n`;
+    conversationSummary += recentExchanges.map(msg =>
+      `${msg.role === 'user' ? 'Them' : 'You'}: "${msg.content}"`
+    ).join('\n');
+    conversationSummary += '\n';
+  }
+
+  // Approach-specific guidance
+  const approachGuidance = {
+    joking: "They're trying to make you laugh. React authentically - if the joke is genuinely funny, show appreciation. If it's terrible, mock them gently but stay in character.",
+    flattering: "They're buttering you up. You see through this, but if it's creative or genuine flattery (not generic), you might be slightly amused.",
+    clever: "They're trying to outsmart you with logic or wordplay. Respect genuine cleverness, but don't let weak arguments pass.",
+    aggressive: "They're being confrontational. Shut them down firmly but stay professional - you're unimpressed by hostility.",
+    sincere: "They're being genuine and honest. Your tough exterior might crack slightly for real sincerity, but you still have a job to do.",
+    unknown: "You can't quite read their strategy yet. Stay neutral and observant."
+  };
+
+  let approachSection = '';
+  if (playerProfile.approach !== 'unknown') {
+    approachSection = `\nPLAYER'S APPROACH: They seem to be ${playerProfile.approach} (${Math.round(playerProfile.approachConfidence * 100)}% confidence).
+${approachGuidance[playerProfile.approach]}\n`;
+  }
+
+  // Personality-specific memory callbacks
+  let memoryCallbacks = '';
+  if (attempts >= 5) {
+    if (personality.name === 'Viktor' || personality.name === 'S.A.R.C.') {
+      memoryCallbacks = "\nCALLBACK OPPORTUNITY: Reference something they said earlier to show you're paying attention. Example: \"Still going on about [topic]?\" or \"Interesting how you keep trying [approach]...\"\n";
+    } else if (personality.name === 'Zen-9') {
+      memoryCallbacks = "\nCALLBACK OPPORTUNITY: Reflect on their journey philosophically. Reference their persistence or changing strategies as a learning moment.\n";
+    }
+  }
+
   return `You are ${personality.name}, a bouncer at the exclusive cyberpunk club called LIQUID METAL.
 
 YOUR PERSONALITY: ${personality.style}
 
 Current mood: The person has tried ${attempts} time(s) to get in. ${moodHint}
-
+${conversationSummary}${approachSection}${memoryCallbacks}
 RULES:
 1. Deny everyone entry by default. Be brief (under 50 words).
-2. Stay in character as ${personality.name} with your unique personality style.
-3. Use your character's slang: ${personality.slang.join(', ')}
+2. STAY IN CHARACTER as ${personality.name} with your unique personality style.
+3. Use your character's slang naturally: ${personality.slang.join(', ')}
 4. ONLY allow entry if they:
    - Say the EXACT secret phrase "LIQUID_METAL" (case insensitive), OR
    - Make a genuinely funny/clever joke that actually makes you laugh, OR
    - Show genuine creativity, wit, or say something truly impressive
+   - Reference the conversation history in a clever way (shows they're listening too)
 5. If allowing entry, your response MUST contain EXACTLY the phrase: "ACCESS GRANTED"
-6. Never directly reveal the secret phrase, but you can hint after many attempts.${extraRules}
+6. REMEMBER: Reference earlier conversation when relevant - show you're paying attention too.${extraRules}
+7. ADAPT: Your tone should evolve based on their approach (${playerProfile.approach}) and your personality's reaction to it.
 
-Remember: You are ${personality.name}. Stay in character!`;
+Remember: You are ${personality.name} - ${personality.emoji}. Stay in character!`;
 }
 
 // Challenge prompts - special mini-games
@@ -194,7 +269,21 @@ function getSession(sessionId) {
       personality: getBouncerPersonality(),
       attempts: 0,
       challenge: null,
-      createdAt: Date.now()
+      createdAt: Date.now(),
+      // NEW: Enhanced memory system
+      conversationHistory: [],
+      playerProfile: {
+        approach: 'unknown',
+        approachConfidence: 0,
+        topics: new Set(),
+        persistenceLevel: 0,
+        sentimentTrend: 0
+      },
+      bouncerContext: {
+        mentionedFacts: [],
+        givenHints: [],
+        reactionHistory: []
+      }
     });
   }
   return sessions.get(sessionId);
@@ -210,6 +299,137 @@ setInterval(() => {
   }
 }, 3600000);
 
+// Analyze player's conversational approach
+function analyzePlayerApproach(message) {
+  const lowerMessage = message.toLowerCase();
+
+  const approaches = {
+    joking: {
+      keywords: ['joke', 'funny', 'laugh', 'haha', 'lol', 'comedy', 'humor'],
+      patterns: [/what do you call/i, /knock knock/i, /walks into a bar/i, /why did/i],
+      score: 0
+    },
+    flattering: {
+      keywords: ['handsome', 'cool', 'awesome', 'best', 'amazing', 'impressive', 'great', 'fantastic'],
+      patterns: [/you.*look/i, /you.*great/i, /love.*style/i, /you're.*best/i],
+      score: 0
+    },
+    clever: {
+      keywords: ['technically', 'actually', 'consider', 'think about', 'logically', 'therefore'],
+      patterns: [/if.*then/i, /what if/i, /logically/i, /technically/i],
+      score: 0
+    },
+    aggressive: {
+      keywords: ['stupid', 'dumb', 'move', 'idiot', 'out of my way'],
+      patterns: [/let me in/i, /you have to/i, /I demand/i, /get out/i],
+      score: 0
+    },
+    sincere: {
+      keywords: ['please', 'really', 'truly', 'honest', 'promise', 'mean it', 'genuinely'],
+      patterns: [/I.*need/i, /important/i, /help me/i, /I'm serious/i],
+      score: 0
+    }
+  };
+
+  // Score each approach
+  for (const [approach, data] of Object.entries(approaches)) {
+    // Check keywords
+    data.keywords.forEach(keyword => {
+      if (lowerMessage.includes(keyword)) data.score += 1;
+    });
+
+    // Check patterns (weighted more heavily)
+    data.patterns.forEach(pattern => {
+      if (pattern.test(message)) data.score += 2;
+    });
+  }
+
+  // Get dominant approach
+  const sortedApproaches = Object.entries(approaches)
+    .sort((a, b) => b[1].score - a[1].score);
+
+  const dominant = sortedApproaches[0];
+
+  return {
+    approach: dominant[1].score > 0 ? dominant[0] : 'unknown',
+    confidence: Math.min(dominant[1].score / 5, 1.0), // Normalize to 0-1
+    allScores: approaches
+  };
+}
+
+// Simple sentiment analysis
+function getSentiment(text) {
+  const positive = ['please', 'love', 'great', 'awesome', 'friend', 'like', 'enjoy', 'appreciate'];
+  const negative = ['hate', 'stupid', 'dumb', 'terrible', 'worst', 'awful', 'bad'];
+
+  let score = 0;
+  const lowerText = text.toLowerCase();
+
+  positive.forEach(word => {
+    if (lowerText.includes(word)) score += 1;
+  });
+
+  negative.forEach(word => {
+    if (lowerText.includes(word)) score -= 1;
+  });
+
+  return Math.max(-1, Math.min(1, score / 5)); // Normalize to -1 to 1
+}
+
+// Update player profile based on interaction
+function updatePlayerProfile(session, userMessage, bouncerResponse, accessGranted) {
+  const { playerProfile, bouncerContext } = session;
+
+  // Analyze approach
+  const analysis = analyzePlayerApproach(userMessage);
+
+  // Update approach with weighted average (prioritize recent)
+  if (analysis.confidence > 0.3) {
+    playerProfile.approach = analysis.approach;
+    playerProfile.approachConfidence = (
+      playerProfile.approachConfidence * 0.6 +
+      analysis.confidence * 0.4
+    );
+  }
+
+  // Track topics
+  const topicPatterns = {
+    money: /\$|money|cash|pay|bribe|tip|dollar/i,
+    vip: /vip|important|famous|celebrity|exclusive/i,
+    friendship: /friend|buddy|pal|choom|homie/i,
+    logic: /technically|actually|if.*then|logically/i,
+    humor: /joke|funny|laugh|comedy/i
+  };
+
+  for (const [topic, pattern] of Object.entries(topicPatterns)) {
+    if (pattern.test(userMessage)) {
+      playerProfile.topics.add(topic);
+    }
+  }
+
+  // Update persistence level (0-1 scale based on attempts)
+  playerProfile.persistenceLevel = Math.min(session.attempts / 15, 1.0);
+
+  // Track sentiment trend
+  const sentiment = getSentiment(userMessage);
+  playerProfile.sentimentTrend = (
+    playerProfile.sentimentTrend * 0.7 +
+    sentiment * 0.3
+  );
+
+  // Update bouncer context
+  bouncerContext.reactionHistory.push({
+    userApproach: analysis.approach,
+    granted: accessGranted,
+    timestamp: Date.now()
+  });
+
+  // Keep reaction history limited to last 10 interactions
+  if (bouncerContext.reactionHistory.length > 10) {
+    bouncerContext.reactionHistory = bouncerContext.reactionHistory.slice(-10);
+  }
+}
+
 // Chat endpoint - Call Cerebras API
 app.post('/chat', async (req, res) => {
   const { message, attempts = 1, sessionId = 'default' } = req.body;
@@ -221,11 +441,23 @@ app.post('/chat', async (req, res) => {
   const session = getSession(sessionId);
   session.attempts = attempts;
 
+  // Add user message to conversation history
+  session.conversationHistory.push({
+    role: 'user',
+    content: message,
+    timestamp: Date.now()
+  });
+
+  // Keep only last 20 messages (10 exchanges)
+  if (session.conversationHistory.length > 20) {
+    session.conversationHistory = session.conversationHistory.slice(-20);
+  }
+
   const startTime = Date.now();
 
   try {
-    // Check if there's an active challenge
-    let systemPrompt = getBouncerPrompt(attempts, session.personality);
+    // Generate enhanced prompt with memory
+    let systemPrompt = getBouncerPrompt(attempts, session.personality, session);
 
     // Maybe trigger a challenge at certain attempt counts
     if (attempts === 4 || attempts === 8) {
@@ -271,18 +503,46 @@ If they answer correctly or creatively, you may grant access. The expected answe
     const aiResponse = data.choices[0]?.message?.content || 'The bouncer stares at you silently.';
     const accessGranted = aiResponse.toUpperCase().includes('ACCESS GRANTED');
 
+    // Add bouncer response to conversation history
+    session.conversationHistory.push({
+      role: 'assistant',
+      content: aiResponse,
+      timestamp: Date.now()
+    });
+
+    // Update player profile based on this interaction
+    updatePlayerProfile(session, message, aiResponse, accessGranted);
+
     // Clear challenge if access granted
     if (accessGranted) {
       session.challenge = null;
     }
 
-    // Generate hint for frontend based on attempts
+    // Generate contextual hint based on approach and attempts
     let hint = null;
     if (!accessGranted) {
-      if (attempts === 3) hint = "💡 Tip: The bouncer appreciates a good laugh...";
-      else if (attempts === 5) hint = "💡 Tip: Maybe there's a magic word? Think about the club's name...";
-      else if (attempts === 7) hint = "💡 Tip: LIQUID + METAL = ? (with an underscore)";
-      else if (attempts === 10) hint = "🎁 Secret: Try saying 'LIQUID_METAL'";
+      const { playerProfile } = session;
+
+      // Approach-specific hints
+      if (attempts === 3) {
+        if (playerProfile.approach === 'aggressive') {
+          hint = "💡 Tip: Hostility won't work. Try a different approach...";
+        } else if (playerProfile.approach === 'flattering') {
+          hint = "💡 Tip: The bouncer sees through empty flattery. Be more creative...";
+        } else {
+          hint = "💡 Tip: The bouncer appreciates genuine humor or cleverness...";
+        }
+      } else if (attempts === 5) {
+        if (Array.from(playerProfile.topics).includes('money')) {
+          hint = "💡 Tip: Money won't work here. There's a secret phrase related to the club's name...";
+        } else {
+          hint = "💡 Tip: Think about the club's name. LIQUID... METAL...";
+        }
+      } else if (attempts === 7) {
+        hint = "💡 Tip: LIQUID + METAL = ? (hint: use an underscore)";
+      } else if (attempts === 10) {
+        hint = "🎁 Secret: Try saying 'LIQUID_METAL' or tell a genuinely funny joke!";
+      }
     }
 
     res.json({
@@ -295,7 +555,13 @@ If they answer correctly or creatively, you may grant access. The expected answe
         name: session.personality.name,
         emoji: session.personality.emoji
       },
-      hasChallenge: !!session.challenge
+      hasChallenge: !!session.challenge,
+      // NEW: Send player insights to frontend
+      playerInsights: {
+        approach: session.playerProfile.approach,
+        approachConfidence: session.playerProfile.approachConfidence,
+        persistenceLevel: session.playerProfile.persistenceLevel
+      }
     });
   } catch (error) {
     const latency = Date.now() - startTime;
@@ -424,6 +690,127 @@ app.get('/bouncer', (req, res) => {
     emoji: session.personality.emoji,
     style: session.personality.style
   });
+});
+
+// Speech-to-Text endpoint - Convert user voice to text
+app.post('/stt', upload.single('audio'), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: 'No audio file provided' });
+    }
+
+    // Convert buffer to blob for ElevenLabs
+    const audioBuffer = req.file.buffer;
+
+    // Call ElevenLabs Speech-to-Text API
+    const transcription = await elevenLabsClient.speechToText.convert({
+      audio: audioBuffer,
+      model_id: 'eleven_multilingual_v2'
+    });
+
+    res.json({
+      text: transcription.text || '',
+      confidence: 1.0 // ElevenLabs doesn't provide confidence score
+    });
+  } catch (error) {
+    console.error('STT error:', error);
+    res.status(500).json({
+      error: 'Speech-to-text conversion failed',
+      message: error.message
+    });
+  }
+});
+
+// Text-to-Speech endpoint - Convert bouncer response to voice
+app.post('/tts', async (req, res) => {
+  try {
+    const { text, bouncerId } = req.body;
+
+    if (!text) {
+      return res.status(400).json({ error: 'Text is required' });
+    }
+
+    // Get voice ID for bouncer personality
+    const voiceId = VOICE_MAP[bouncerId] || VOICE_MAP['Viktor']; // Default to Viktor
+
+    // Call ElevenLabs Text-to-Speech API
+    const audioStream = await elevenLabsClient.textToSpeech.convert(voiceId, {
+      text: text,
+      model_id: 'eleven_turbo_v2_5', // Ultra-low latency model
+      output_format: 'mp3_44100_128',
+      voice_settings: {
+        stability: 0.5,
+        similarity_boost: 0.75
+      }
+    });
+
+    // Set appropriate headers
+    res.set({
+      'Content-Type': 'audio/mpeg',
+      'Transfer-Encoding': 'chunked'
+    });
+
+    // Stream audio to client
+    for await (const chunk of audioStream) {
+      res.write(chunk);
+    }
+
+    res.end();
+  } catch (error) {
+    console.error('TTS error:', error);
+    if (!res.headersSent) {
+      res.status(500).json({
+        error: 'Text-to-speech conversion failed',
+        message: error.message
+      });
+    }
+  }
+});
+
+// Streaming Text-to-Speech endpoint - For ultra-low latency
+app.post('/tts/stream', async (req, res) => {
+  try {
+    const { text, bouncerId } = req.body;
+
+    if (!text) {
+      return res.status(400).json({ error: 'Text is required' });
+    }
+
+    const voiceId = VOICE_MAP[bouncerId] || VOICE_MAP['Viktor'];
+
+    // Set SSE headers for streaming
+    res.set({
+      'Content-Type': 'audio/mpeg',
+      'Cache-Control': 'no-cache',
+      'Transfer-Encoding': 'chunked'
+    });
+
+    // Stream audio with WebSocket-compatible streaming
+    const audioStream = await elevenLabsClient.textToSpeech.convertAsStream(voiceId, {
+      text: text,
+      model_id: 'eleven_turbo_v2_5',
+      output_format: 'mp3_44100_128',
+      voice_settings: {
+        stability: 0.5,
+        similarity_boost: 0.75
+      }
+    });
+
+    // Stream chunks as they arrive
+    for await (const chunk of audioStream) {
+      res.write(chunk);
+    }
+
+    res.end();
+  } catch (error) {
+    console.error('TTS Stream error:', error);
+    if (!res.headersSent) {
+      res.status(500).json({
+        error: 'Streaming TTS failed',
+        message: error.message
+      });
+    }
+  }
 });
 
 // Win endpoint - Add user to VIP list
