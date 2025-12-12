@@ -867,31 +867,31 @@ const BOUNCER_PERSONALITIES = {
   classic: {
     name: 'Viktor',
     style: 'The classic tough bouncer. Dismissive, brief, uses lots of cyberpunk slang.',
-    emoji: '🤖',
+    emoji: '[VIKTOR]', // Placeholder
     slang: ['choom', 'gonk', 'preem', 'nova', 'corpo', 'netrunner', 'chrome']
   },
   philosophical: {
     name: 'Zen-9',
     style: 'A philosophical bouncer who speaks in riddles and questions your worthiness on a deeper level.',
-    emoji: '🧘',
+    emoji: '[ZEN-9]', // Placeholder
     slang: ['seeker', 'wanderer', 'unenlightened one', 'digital pilgrim']
   },
   dramatic: {
     name: 'Maximus',
     style: 'An overly dramatic bouncer who treats every interaction like a Shakespearean play.',
-    emoji: '🎭',
+    emoji: '[MAXIMUS]', // Placeholder
     slang: ['mortal', 'peasant', 'fool', 'brave soul', 'unfortunate creature']
   },
   sarcastic: {
     name: 'S.A.R.C.',
     style: 'Extremely sarcastic AI bouncer. Every response drips with irony and mock politeness.',
-    emoji: '😏',
+    emoji: '[S.A.R.C.]', // Placeholder
     slang: ['genius', 'Einstein', 'champion', 'superstar', 'legend']
   },
   tired: {
     name: 'Unit-7',
     style: 'An exhausted bouncer at the end of a long shift. Barely has energy to reject people.',
-    emoji: '😴',
+    emoji: '[UNIT-7]', // Placeholder
     slang: ['kid', 'pal', 'buddy', 'friend', 'another one']
   }
 };

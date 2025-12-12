@@ -543,7 +543,7 @@
       <div class="flex justify-center mb-4">
         <div class="relative">
           <div id="bouncerAvatar" class="w-24 h-24 md:w-32 md:h-32 rounded-full neon-border flex items-center justify-center bg-black transition-all duration-300">
-            <span id="bouncerEmoji" class="text-4xl md:text-5xl">🤖</span>
+            <div id="bouncerVisual" class="w-full h-full flex items-center justify-center text-4xl md:text-5xl text-gray-400 font-cyber"></div>
           </div>
           <div id="bouncerNameTag" class="absolute -bottom-2 left-1/2 transform -translate-x-1/2 bg-black px-3 py-1 neon-border text-xs neon-text font-cyber">
             <span id="bouncerName">BOUNCER</span>
@@ -688,7 +688,7 @@
     const bestLatencyEl = document.getElementById('bestLatency');
     const moodFill = document.getElementById('moodFill');
     const moodText = document.getElementById('moodText');
-    const bouncerEmoji = document.getElementById('bouncerEmoji');
+    const bouncerVisual = document.getElementById('bouncerVisual');
     const bouncerAvatar = document.getElementById('bouncerAvatar');
     const bouncerName = document.getElementById('bouncerName');
     const achievementsContainer = document.getElementById('achievements');
@@ -768,7 +768,9 @@
 
       moodFill.style.width = moodPercent + '%';
       moodText.textContent = moodLabel;
-      bouncerEmoji.textContent = emoji;
+      if (bouncerVisual) { // Update bouncerVisual here too
+          bouncerVisual.textContent = emoji;
+      }
     }
 
     function updateStats(latency) {
@@ -920,7 +922,9 @@
     function updateBouncerDisplay(bouncer) {
       if (bouncer) {
         currentBouncer = bouncer;
-        bouncerEmoji.textContent = bouncer.emoji || '🤖';
+        if (bouncerVisual) {
+            bouncerVisual.textContent = bouncer.emoji || bouncer.name;
+        }
         bouncerName.textContent = bouncer.name || 'BOUNCER';
       }
     }
