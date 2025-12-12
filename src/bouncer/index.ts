@@ -1,7 +1,6 @@
 /// <reference types="@cloudflare/workers-types" />
 
 import { Service } from '@liquidmetal-ai/raindrop-framework';
-import { ElevenLabsClient } from '@elevenlabs/elevenlabs-js';
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { ContentfulStatusCode } from 'hono/utils/http-status';
@@ -1014,23 +1013,31 @@ app.post('/tts', async (c) => {
       return c.json({ error: 'TTS service is not configured' }, 500);
     }
 
-    const elevenLabsClient = new ElevenLabsClient({
-      apiKey: c.env.ELEVENLABS_API_KEY,
-    });
-
     const voiceId = VOICE_MAP[bouncerId as keyof typeof VOICE_MAP] || VOICE_MAP['BOUNCER'];
 
-    const audioStream = await elevenLabsClient.textToSpeech.convert(voiceId, {
-      text: text,
-      modelId: 'eleven_turbo_v2_5',
-      outputFormat: 'mp3_44100_128',
-      voiceSettings: {
-        stability: 0.5,
-        similarityBoost: 0.75,
+    const response = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'xi-api-key': c.env.ELEVENLABS_API_KEY,
       },
+      body: JSON.stringify({
+        text: text,
+        model_id: 'eleven_turbo_v2_5', // Use snake_case for direct API call
+        voice_settings: { // Use snake_case for direct API call
+          stability: 0.5,
+          similarity_boost: 0.75
+        }
+      })
     });
 
-    return new Response(audioStream as ReadableStream, {
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('ElevenLabs TTS API error:', errorText);
+      return c.json({ error: 'Text-to-speech API error', details: errorText }, response.status as ContentfulStatusCode);
+    }
+
+    return new Response(response.body, {
       headers: {
         'Content-Type': 'audio/mpeg',
         'Transfer-Encoding': 'chunked'
@@ -1038,7 +1045,7 @@ app.post('/tts', async (c) => {
     });
 
   } catch (error: any) {
-    console.error('TTS error in Hono:', JSON.stringify(error, Object.getOwnPropertyNames(error)));
+    console.error('TTS error in Hono:', error.message);
     return c.json({
       error: 'Text-to-speech conversion failed',
       message: error.message,
