@@ -20,6 +20,10 @@ application "ai-bouncer" {
     secret = true
   }
 
+  env "ELEVENLABS_API_KEY" {
+    secret = true
+  }
+
   env "VULTR_ENDPOINT" {
     default = "https://ams2.vultrobjects.com"
   }

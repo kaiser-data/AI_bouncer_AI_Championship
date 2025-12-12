@@ -20,6 +20,7 @@ env:
   - VULTR_SECRET_KEY
   - VULTR_ENDPOINT
   - VULTR_BUCKET_NAME
+  - ELEVENLABS_API_KEY
 
 # Health check
 health:

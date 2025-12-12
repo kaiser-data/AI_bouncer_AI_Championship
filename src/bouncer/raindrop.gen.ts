@@ -8,6 +8,7 @@ export interface Env {
   AI: Ai;
   annotation: Annotation<Omit<MRNObject, 'type' | 'applicationName' | 'versionId'>>;
   CEREBRAS_API_KEY: string;
+  ELEVENLABS_API_KEY: string;
   logger: Logger;
   mem: KvCache;
   PORT: string;

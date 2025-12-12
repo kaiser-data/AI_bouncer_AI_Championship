@@ -1,4 +1,4 @@
-globalThis.__RAINDROP_GIT_COMMIT_SHA = "unknown"; 
+globalThis.__RAINDROP_GIT_COMMIT_SHA = "ce27b056c3626e90f2287f528c2445218ab0499d"; 
 var __defProp = Object.defineProperty;
 var __getOwnPropNames = Object.getOwnPropertyNames;
 var __esm = (fn, res) => function __init() {
@@ -19176,6 +19176,38 @@ async function saveVIPList(env, vipData) {
 }
 app.get("/health", (c2) => {
   return c2.json({ status: "ok", timestamp: (/* @__PURE__ */ new Date()).toISOString() });
+});
+app.post("/tts", async (c2) => {
+  const { text } = await c2.req.json();
+  if (!text) {
+    return c2.json({ error: "Text is required" }, 400);
+  }
+  const response = await fetch(
+    "https://api.elevenlabs.io/v1/text-to-speech/21m00Tcm4TlvDq8ikWAM",
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "xi-api-key": c2.env.ELEVENLABS_API_KEY
+      },
+      body: JSON.stringify({
+        text,
+        model_id: "eleven_monolingual_v1",
+        voice_settings: {
+          stability: 0.5,
+          similarity_boost: 0.5
+        }
+      })
+    }
+  );
+  if (!response.ok) {
+    return c2.json({ error: "ElevenLabs API error" }, response.status);
+  }
+  return new Response(response.body, {
+    headers: {
+      "Content-Type": "audio/mpeg"
+    }
+  });
 });
 app.get("/bouncer", (c2) => {
   const sessionId = c2.req.query("sessionId") || "default";

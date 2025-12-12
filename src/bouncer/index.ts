@@ -991,6 +991,43 @@ app.get('/health', (c) => {
   return c.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
+app.post('/tts', async (c) => {
+  const { text } = await c.req.json();
+
+  if (!text) {
+    return c.json({ error: 'Text is required' }, 400);
+  }
+
+  const response = await fetch(
+    'https://api.elevenlabs.io/v1/text-to-speech/21m00Tcm4TlvDq8ikWAM',
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'xi-api-key': c.env.ELEVENLABS_API_KEY,
+      },
+      body: JSON.stringify({
+        text: text,
+        model_id: 'eleven_monolingual_v1',
+        voice_settings: {
+          stability: 0.5,
+          similarity_boost: 0.5,
+        },
+      }),
+    }
+  );
+
+  if (!response.ok) {
+    return c.json({ error: 'ElevenLabs API error' }, response.status as ContentfulStatusCode);
+  }
+
+  return new Response(response.body, {
+    headers: {
+      'Content-Type': 'audio/mpeg',
+    },
+  });
+});
+
 // Get bouncer personality
 app.get('/bouncer', (c) => {
   const sessionId = c.req.query('sessionId') || 'default';
