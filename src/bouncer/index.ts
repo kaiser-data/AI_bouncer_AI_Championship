@@ -1026,7 +1026,7 @@ app.post('/tts', async (c) => {
       outputFormat: 'mp3_44100_128',
       voiceSettings: {
         stability: 0.5,
-        similarity_boost: 0.75,
+        similarityBoost: 0.75,
       },
     });
 
