@@ -41,11 +41,12 @@ const elevenLabsClient = new ElevenLabsClient({
 
 // Voice ID mapping for each bouncer personality
 const VOICE_MAP = {
-  'Viktor': 'pNInz6obpgDQGcFmaJgB',       // Antoni - deep, well-rounded
-  'Zen-9': 'AZnzlk1XvdvUeBnXmlld',        // Domi - calm, soothing
-  'Maximus': 'ErXwobaYiN019PkySvjV',      // Callum - theatrical, expressive
-  'S.A.R.C.': 'EXAVITQu4vr4xnSDxMaL',     // Jessie - sharp, confident
-  'Unit-7': '21m00Tcm4TlvDq8ikWAM'        // Josh - tired, low-energy
+  'Viktor': 'TxGEqnHWrfWFTfGW9XjX',       // Josh - Deep, gravelly, intimidating
+  'Zen-9': 'pqHfZKP75CvOlQylNhV4',        // Bill - Calm but authoritative, mature
+  'Maximus': 'IKne3meq5aSn9XLyUdCD',      // Charlie - Energetic, theatrical, Australian
+  'S.A.R.C.': 'XB0fDUnXU5powFXDhCwa',     // Charlotte - Sharp, sarcastic British
+  'Unit-7': 'onwK4e9ZLuTAKqWW03F9',       // Daniel - Tired, British, matter-of-fact
+  'BOUNCER': 'TxGEqnHWrfWFTfGW9XjX'       // Default fallback
 };
 
 // Multer configuration for audio upload
