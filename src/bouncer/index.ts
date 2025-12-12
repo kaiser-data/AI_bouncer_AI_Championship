@@ -1024,7 +1024,7 @@ app.post('/tts', async (c) => {
       text: text,
       modelId: 'eleven_turbo_v2_5',
       outputFormat: 'mp3_44100_128',
-      voice_settings: {
+      voiceSettings: {
         stability: 0.5,
         similarity_boost: 0.75,
       },
