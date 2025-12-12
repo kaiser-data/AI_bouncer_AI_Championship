@@ -720,29 +720,38 @@ app.get('/bouncer', (req, res) => {
 
 // Speech-to-Text endpoint - Convert user voice to text
 app.post('/stt', upload.single('audio'), async (req, res) => {
+  console.log('Received /stt request');
   try {
     if (!req.file) {
+      console.log('No audio file provided in /stt request');
       return res.status(400).json({ error: 'No audio file provided' });
     }
 
-    // Convert buffer to blob for ElevenLabs
+    console.log('STT request file info:', {
+      fieldname: req.file.fieldname,
+      originalname: req.file.originalname,
+      mimetype: req.file.mimetype,
+      size: req.file.size,
+    });
+
     const audioBuffer = req.file.buffer;
 
-    // Call ElevenLabs Speech-to-Text API
+    console.log('Calling ElevenLabs STT API...');
     const transcription = await elevenLabsClient.speechToText.convert({
       audio: audioBuffer,
       model_id: 'eleven_multilingual_v2'
     });
+    console.log('ElevenLabs STT API response received:', transcription);
 
     res.json({
       text: transcription.text || '',
       confidence: 1.0 // ElevenLabs doesn't provide confidence score
     });
   } catch (error) {
-    console.error('STT error:', error);
+    console.error('STT error:', JSON.stringify(error, null, 2));
     res.status(500).json({
       error: 'Speech-to-text conversion failed',
-      message: error.message
+      message: error.message,
     });
   }
 });

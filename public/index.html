@@ -1249,6 +1249,7 @@
         return;
       }
       const audioBlob = new Blob(audioChunks, { type: recorderMimeType });
+      console.log(`Processing audio blob: size=${audioBlob.size}, type=${audioBlob.type}`);
 
       try {
         // Send to STT endpoint
@@ -1262,10 +1263,16 @@
         
         if (!response.ok) {
           const errorText = await response.text();
-          throw new Error(`STT request failed: ${response.status} ${errorText}`);
+          console.error('STT server error response:', errorText);
+          let errorJson;
+          try {
+            errorJson = JSON.parse(errorText);
+          } catch(e) { /* not json */ }
+          throw new Error(`Audio processing failed on server: ${errorJson?.message || response.statusText}`);
         }
 
         const data = await response.json();
+        console.log('STT response data:', data);
 
         // Update UI
         voiceBtn.classList.remove('processing');
@@ -1280,10 +1287,10 @@
         }
 
       } catch (error) {
-        console.error('STT error:', error);
+        console.error('STT client-side error:', error);
         voiceBtn.classList.remove('processing');
         voiceBtnIcon.textContent = '🎤';
-        addMessage('*Static crackles* "Audio processing failed. Try typing instead."', 'bouncer', 0);
+        addMessage(`*Static crackles* "Audio processing failed. ${error.message}". Check console for details.`, 'bouncer', 0);
       }
     }
 
