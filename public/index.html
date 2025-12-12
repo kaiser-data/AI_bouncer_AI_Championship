@@ -1073,6 +1073,8 @@
     let animationId = null;
     let audioPlayer = new Audio();
     let voiceResponsesEnabled = false;
+    let silenceTimeout = null;
+    let isSpeaking = false;
 
     const voiceBtn = document.getElementById('voiceBtn');
     const voiceBtnIcon = document.getElementById('voiceBtnIcon');
@@ -1082,6 +1084,10 @@
     const insightsPanel = document.getElementById('insightsPanel');
     const insightApproach = document.getElementById('insightApproach');
     const persistenceLevel = document.getElementById('persistenceLevel');
+
+    // Voice Activity Detection Settings
+    const SILENCE_THRESHOLD = 15; // Audio level below this is considered silence (0-255)
+    const SILENCE_DURATION = 1500; // Stop after 1.5 seconds of silence (ms)
 
     // Initialize audio visualization
     async function initAudioVisualization(stream) {
@@ -1095,7 +1101,7 @@
       drawWaveform();
     }
 
-    // Draw waveform visualization
+    // Draw waveform visualization with silence detection
     function drawWaveform() {
       const bufferLength = analyser.frequencyBinCount;
       const dataArray = new Uint8Array(bufferLength);
@@ -1106,6 +1112,13 @@
 
         analyser.getByteFrequencyData(dataArray);
 
+        // Calculate average volume
+        let sum = 0;
+        for (let i = 0; i < bufferLength; i++) {
+          sum += dataArray[i];
+        }
+        const averageVolume = sum / bufferLength;
+
         // Update each bar based on frequency data
         bars.forEach((bar, index) => {
           const dataIndex = Math.floor((index / bars.length) * bufferLength);
@@ -1113,6 +1126,26 @@
           const height = Math.max(10, (value / 255) * 50);
           bar.style.height = height + 'px';
         });
+
+        // Voice Activity Detection
+        if (averageVolume > SILENCE_THRESHOLD) {
+          // User is speaking
+          isSpeaking = true;
+          // Clear any existing silence timeout
+          if (silenceTimeout) {
+            clearTimeout(silenceTimeout);
+            silenceTimeout = null;
+          }
+        } else if (isSpeaking) {
+          // Silence detected after speaking
+          if (!silenceTimeout) {
+            console.log('Silence detected, waiting', SILENCE_DURATION, 'ms...');
+            silenceTimeout = setTimeout(() => {
+              console.log('Auto-stopping recording after silence');
+              stopRecording();
+            }, SILENCE_DURATION);
+          }
+        }
 
         animationId = requestAnimationFrame(animate);
       }
@@ -1139,6 +1172,13 @@
         });
 
         audioChunks = [];
+        isSpeaking = false; // Reset speaking state
+
+        // Clear any existing timeout
+        if (silenceTimeout) {
+          clearTimeout(silenceTimeout);
+          silenceTimeout = null;
+        }
 
         mediaRecorder.ondataavailable = (event) => {
           if (event.data.size > 0) {
@@ -1158,6 +1198,8 @@
         voiceBtnIcon.textContent = '🔴';
         voiceWaveform.classList.remove('hidden');
 
+        console.log('🎤 Recording started - will auto-stop after 1.5s of silence');
+
         // Initialize visualization
         await initAudioVisualization(stream);
 
@@ -1173,6 +1215,12 @@
         mediaRecorder.stop();
         mediaRecorder.stream.getTracks().forEach(track => track.stop());
         isRecording = false;
+
+        // Clear any pending silence timeout
+        if (silenceTimeout) {
+          clearTimeout(silenceTimeout);
+          silenceTimeout = null;
+        }
 
         // Update UI
         voiceBtn.classList.remove('recording');
