@@ -752,6 +752,7 @@ app.post('/stt', upload.single('audio'), async (req, res) => {
     res.status(500).json({
       error: 'Speech-to-text conversion failed',
       message: error.message,
+      details: error.stack, // DANGEROUS FOR PROD: For debugging only
     });
   }
 });

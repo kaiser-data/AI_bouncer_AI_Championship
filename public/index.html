@@ -1264,11 +1264,11 @@
         if (!response.ok) {
           const errorText = await response.text();
           console.error('STT server error response:', errorText);
-          let errorJson;
+          let errorJson = {};
           try {
             errorJson = JSON.parse(errorText);
           } catch(e) { /* not json */ }
-          throw new Error(`Audio processing failed on server: ${errorJson?.message || response.statusText}`);
+          throw new Error(`Server Error: ${errorJson.message || 'Unknown server error.'} Details: ${errorJson.details || 'No details.'}`);
         }
 
         const data = await response.json();
