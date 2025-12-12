@@ -1023,7 +1023,7 @@ app.post('/tts', async (c) => {
     const audioStream = await elevenLabsClient.textToSpeech.convert(voiceId, {
       text: text,
       modelId: 'eleven_turbo_v2_5',
-      output_format: 'mp3_44100_128',
+      outputFormat: 'mp3_44100_128',
       voice_settings: {
         stability: 0.5,
         similarity_boost: 0.75,
