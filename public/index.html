@@ -1275,10 +1275,16 @@
         }
 
       } catch (error) {
-        console.error('STT error:', error);
+        console.error('STT client-side error:', error);
         voiceBtn.classList.remove('processing');
         voiceBtnIcon.textContent = '🎤';
-        addMessage('*Static crackles* "Audio processing failed. Try typing instead."', 'bouncer', 0);
+        let errorMessage = 'Unknown error.';
+        if (error instanceof Error) {
+          errorMessage = error.message;
+        } else if (typeof error === 'string') {
+          errorMessage = error;
+        }
+        addMessage(`*Static crackles* "Audio processing failed. ${errorMessage}". Check console for details.`, 'bouncer', 0);
       }
     }
 
