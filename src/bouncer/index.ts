@@ -1236,7 +1236,7 @@ app.post('/stt', async (c) => {
     }
     
     const apiFormData = new FormData();
-    apiFormData.append('audio', audioFile);
+    apiFormData.append('file', audioFile);
     apiFormData.append('model_id', 'scribe_v1');
 
     const response = await fetch('https://api.elevenlabs.io/v1/speech-to-text', {
