@@ -1,4 +1,4 @@
-globalThis.__RAINDROP_GIT_COMMIT_SHA = "ce27b056c3626e90f2287f528c2445218ab0499d"; 
+globalThis.__RAINDROP_GIT_COMMIT_SHA = "229e74edf027e94a68f396b0927620b25da5587d"; 
 var __defProp = Object.defineProperty;
 var __getOwnPropNames = Object.getOwnPropertyNames;
 var __esm = (fn, res) => function __init() {
