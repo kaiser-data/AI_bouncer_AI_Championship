@@ -1022,7 +1022,7 @@ app.post('/tts', async (c) => {
 
     const audioStream = await elevenLabsClient.textToSpeech.convert(voiceId, {
       text: text,
-      model_id: 'eleven_turbo_v2_5',
+      modelId: 'eleven_turbo_v2_5',
       output_format: 'mp3_44100_128',
       voice_settings: {
         stability: 0.5,
@@ -1218,37 +1218,42 @@ app.get('/stats', async (c) => {
 app.post('/stt', async (c) => {
   try {
     if (!c.env.ELEVENLABS_API_KEY) {
-      console.error('STT Error: ELEVENLABS_API_KEY is not set on the server.');
-      return c.json({
-        error: 'Configuration error',
-        message: 'The speech-to-text service is not configured on the server.',
-      }, 500);
+      return c.json({ error: 'STT service is not configured' }, 500);
     }
 
     const formData = await c.req.formData();
     const audioFile = formData.get('audio');
 
-    if (!audioFile || !(audioFile instanceof File)) {
+    if (!audioFile) {
       return c.json({ error: 'No audio file provided' }, 400);
     }
     
-    const audioBuffer = await audioFile.arrayBuffer();
+    const apiFormData = new FormData();
+    apiFormData.append('audio', audioFile);
+    apiFormData.append('model_id', 'eleven_multilingual_v2');
 
-    const elevenLabsClient = new ElevenLabsClient({
-      apiKey: c.env.ELEVENLABS_API_KEY,
+    const response = await fetch('https://api.elevenlabs.io/v1/speech-to-text', {
+      method: 'POST',
+      headers: {
+        'xi-api-key': c.env.ELEVENLABS_API_KEY,
+      },
+      body: apiFormData,
     });
 
-    const transcription = await elevenLabsClient.speechToText.convert({
-      audio: Buffer.from(audioBuffer),
-      model_id: 'eleven_multilingual_v2',
-    });
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('ElevenLabs STT API error:', errorText);
+      return c.json({ error: 'Speech-to-text API error', details: errorText }, response.status as ContentfulStatusCode);
+    }
+
+    const transcription = await response.json();
 
     return c.json({
-      text: transcription.text || '',
+      text: (transcription as any).text || '',
     });
 
   } catch (error: any) {
-    console.error('STT error in Hono:', JSON.stringify(error, Object.getOwnPropertyNames(error)));
+    console.error('STT error in Hono:', error.message);
     return c.json({
       error: 'Speech-to-text conversion failed',
       message: error.message,
