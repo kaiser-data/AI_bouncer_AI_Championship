@@ -748,11 +748,13 @@ app.post('/stt', upload.single('audio'), async (req, res) => {
       confidence: 1.0 // ElevenLabs doesn't provide confidence score
     });
   } catch (error) {
-    console.error('STT error:', JSON.stringify(error, null, 2));
+    console.error('STT RAW error object:', error);
+    const errorString = JSON.stringify(error, Object.getOwnPropertyNames(error));
+    console.error('STT stringified error:', errorString);
     res.status(500).json({
       error: 'Speech-to-text conversion failed',
-      message: error.message,
-      details: error.stack, // DANGEROUS FOR PROD: For debugging only
+      message: `Error during STT: ${error.message || 'No message'}`,
+      details: `Full error: ${errorString}`, // DANGEROUS FOR PROD
     });
   }
 });

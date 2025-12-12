@@ -1268,7 +1268,7 @@
           try {
             errorJson = JSON.parse(errorText);
           } catch(e) { /* not json */ }
-          throw new Error(`Server Error: ${errorJson.message || 'Unknown server error.'} Details: ${errorJson.details || 'No details.'}`);
+          throw new Error(`${errorJson.message || 'Unknown server error.'} --- Details: ${errorJson.details || 'No details.'}`);
         }
 
         const data = await response.json();
