@@ -1,0 +1,39 @@
+// AI Bouncer - Cyberpunk Club Entrance Game
+// Built for AI Champion Ship Hackathon
+
+application "ai-bouncer" {
+
+  // === Environment Variables ===
+  env "PORT" {
+    default = "3000"
+  }
+
+  env "CEREBRAS_API_KEY" {
+    secret = true
+  }
+
+  env "VULTR_ACCESS_KEY" {
+    secret = true
+  }
+
+  env "VULTR_SECRET_KEY" {
+    secret = true
+  }
+
+  env "VULTR_ENDPOINT" {
+    default = "https://ams2.vultrobjects.com"
+  }
+
+  env "VULTR_BUCKET_NAME" {
+    default = "bouncerai"
+  }
+
+  // === Services ===
+  // Main HTTP service for the AI Bouncer web app
+  service "bouncer" {
+    visibility = "public"
+    domain {
+      cname = "ai-bouncer"  // will be ai-bouncer.<tenant>.lmapp.run
+    }
+  }
+}

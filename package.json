@@ -1,0 +1,32 @@
+{
+  "name": "ai-bouncer",
+  "version": "1.0.0",
+  "description": "AI Bouncer - Convince the AI to let you into the club",
+  "type": "module",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js"
+  },
+  "keywords": [
+    "ai",
+    "cerebras",
+    "vultr",
+    "hackathon",
+    "liquidmetal"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.679.0",
+    "@liquidmetal-ai/raindrop-framework": "0.13.0",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.21.1",
+    "hono": "^4.0.0"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.0.0",
+    "typescript": "^5.0.0"
+  }
+}

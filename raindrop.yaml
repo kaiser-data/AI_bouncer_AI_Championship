@@ -1,0 +1,33 @@
+name: ai-bouncer
+version: 1.0.0
+description: AI Bouncer - Convince the AI to let you into the exclusive LIQUID METAL club
+
+runtime: nodejs20
+
+# Build configuration
+build:
+  command: npm install
+
+# Start configuration
+start:
+  command: npm start
+
+# Environment variables (set via raindrop build env set)
+env:
+  - PORT
+  - CEREBRAS_API_KEY
+  - VULTR_ACCESS_KEY
+  - VULTR_SECRET_KEY
+  - VULTR_ENDPOINT
+  - VULTR_BUCKET_NAME
+
+# Health check
+health:
+  path: /health
+  interval: 30s
+  timeout: 5s
+
+# Resources
+resources:
+  memory: 512Mi
+  cpu: 0.5
