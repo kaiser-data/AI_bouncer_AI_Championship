@@ -1232,14 +1232,24 @@
       if (voiceResponsesEnabled) {
         voiceToggleIcon.textContent = '🔊';
         voiceToggle.classList.add('playing');
+        voiceToggle.style.borderColor = 'var(--cyber-teal)';
+        console.log('✓ Voice responses ENABLED');
+
         // Test audio playback to unlock autoplay
         const testAudio = new Audio();
-        testAudio.play().catch(() => {
-          // Autoplay blocked, but user gesture captured
+        testAudio.volume = 0.01; // Very quiet
+        testAudio.play().then(() => {
+          console.log('✓ Audio autoplay unlocked');
+          addMessage('🔊 Voice responses enabled! The bouncer will now speak.', 'bouncer', 0);
+        }).catch((e) => {
+          console.warn('Autoplay test failed:', e);
         });
       } else {
         voiceToggleIcon.textContent = '🔇';
         voiceToggle.classList.remove('playing');
+        voiceToggle.style.borderColor = 'var(--cyber-emerald)';
+        console.log('✗ Voice responses DISABLED');
+
         // Stop any playing audio
         if (!audioPlayer.paused) {
           audioPlayer.pause();
@@ -1253,8 +1263,11 @@
     async function playBouncerResponse(text, bouncerId) {
       // Only play if voice responses are enabled
       if (!voiceResponsesEnabled) {
+        console.log('Voice responses disabled. Click 🔇 button to enable.');
         return;
       }
+
+      console.log('Playing TTS for:', text.substring(0, 50) + '...');
 
       try {
         // Update UI
@@ -1266,24 +1279,39 @@
           body: JSON.stringify({ text, bouncerId: bouncerId || currentBouncer.name })
         });
 
-        if (!response.ok) throw new Error('TTS failed');
+        if (!response.ok) {
+          console.error('TTS request failed:', response.status);
+          throw new Error('TTS failed');
+        }
 
         const audioBlob = await response.blob();
+        console.log('Received audio blob:', audioBlob.size, 'bytes');
         const audioUrl = URL.createObjectURL(audioBlob);
 
         audioPlayer.src = audioUrl;
 
         audioPlayer.onended = () => {
+          console.log('Audio playback ended');
           bouncerAvatar.classList.remove('speaking');
           URL.revokeObjectURL(audioUrl);
         };
 
-        audioPlayer.onerror = () => {
+        audioPlayer.onerror = (e) => {
+          console.error('Audio playback error:', e);
           bouncerAvatar.classList.remove('speaking');
-          console.error('Audio playback failed');
         };
 
-        await audioPlayer.play();
+        console.log('Starting audio playback...');
+        const playPromise = audioPlayer.play();
+
+        playPromise.then(() => {
+          console.log('Audio playing successfully!');
+        }).catch((error) => {
+          console.error('Autoplay blocked or failed:', error);
+          bouncerAvatar.classList.remove('speaking');
+          // Show user a message
+          addMessage('*Click the 🔊 button to enable voice responses*', 'bouncer', 0);
+        });
 
       } catch (error) {
         console.error('TTS error:', error);
