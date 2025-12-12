@@ -720,48 +720,29 @@ app.get('/bouncer', (req, res) => {
 
 // Speech-to-Text endpoint - Convert user voice to text
 app.post('/stt', upload.single('audio'), async (req, res) => {
-  console.log('Received /stt request');
-  if (!process.env.ELEVENLABS_API_KEY) {
-    console.error('STT Error: ELEVENLABS_API_KEY is not set on the server.');
-    return res.status(500).json({
-      error: 'Configuration error',
-      message: 'The speech-to-text service is not configured on the server.',
-    });
-  }
   try {
     if (!req.file) {
-      console.log('No audio file provided in /stt request');
       return res.status(400).json({ error: 'No audio file provided' });
     }
 
-    console.log('STT request file info:', {
-      fieldname: req.file.fieldname,
-      originalname: req.file.originalname,
-      mimetype: req.file.mimetype,
-      size: req.file.size,
-    });
-
+    // Convert buffer to blob for ElevenLabs
     const audioBuffer = req.file.buffer;
 
-    console.log('Calling ElevenLabs STT API...');
+    // Call ElevenLabs Speech-to-Text API
     const transcription = await elevenLabsClient.speechToText.convert({
       audio: audioBuffer,
       model_id: 'eleven_multilingual_v2'
     });
-    console.log('ElevenLabs STT API response received:', transcription);
 
     res.json({
       text: transcription.text || '',
       confidence: 1.0 // ElevenLabs doesn't provide confidence score
     });
   } catch (error) {
-    console.error('STT RAW error object:', error);
-    const errorString = JSON.stringify(error, Object.getOwnPropertyNames(error));
-    console.error('STT stringified error:', errorString);
+    console.error('STT error:', error);
     res.status(500).json({
       error: 'Speech-to-text conversion failed',
-      message: `Error during STT: ${error.message || 'No message'}`,
-      details: `Full error: ${errorString}`, // DANGEROUS FOR PROD
+      message: error.message
     });
   }
 });

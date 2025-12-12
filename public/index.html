@@ -1242,17 +1242,13 @@
     // Process recorded audio
     async function processRecording() {
       if (audioChunks.length === 0) {
-        console.log('No audio recorded.');
         voiceBtn.classList.remove('processing');
         voiceBtnIcon.textContent = '🎤';
-        addMessage('*The bouncer leans in* "Didn\'t catch that, choom. Speak up or type it."', 'bouncer', 0);
         return;
       }
       const audioBlob = new Blob(audioChunks, { type: recorderMimeType });
-      console.log(`Processing audio blob: size=${audioBlob.size}, type=${audioBlob.type}`);
 
       try {
-        // Send to STT endpoint
         const formData = new FormData();
         formData.append('audio', audioBlob, `recording.${recorderMimeType.split('/')[1]}`);
 
@@ -1262,20 +1258,16 @@
         });
         
         if (!response.ok) {
-          const errorText = await response.text();
-          console.error('STT server error response:', errorText);
-          throw new Error(errorText || 'Unknown server error.');
+          console.error('STT request failed:', response.status, await response.text());
+          throw new Error(`Server returned ${response.status}`);
         }
 
         const data = await response.json();
-        console.log('STT response data:', data);
 
-        // Update UI
         voiceBtn.classList.remove('processing');
         voiceBtnIcon.textContent = '🎤';
 
         if (data.text && data.text.trim()) {
-          // Auto-populate input and send
           messageInput.value = data.text;
           sendMessage();
         } else {
@@ -1283,10 +1275,10 @@
         }
 
       } catch (error) {
-        console.error('STT client-side error:', error);
+        console.error('STT error:', error);
         voiceBtn.classList.remove('processing');
         voiceBtnIcon.textContent = '🎤';
-        addMessage(`*Static crackles* "Audio processing failed. ${error.message}". Check console for details.`, 'bouncer', 0);
+        addMessage('*Static crackles* "Audio processing failed. Try typing instead."', 'bouncer', 0);
       }
     }
 

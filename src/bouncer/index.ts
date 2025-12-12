@@ -1,6 +1,7 @@
 /// <reference types="@cloudflare/workers-types" />
 
 import { Service } from '@liquidmetal-ai/raindrop-framework';
+import { ElevenLabsClient } from '@elevenlabs/elevenlabs-js';
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { ContentfulStatusCode } from 'hono/utils/http-status';
@@ -853,6 +854,16 @@ app.get('/', (c) => c.html(HTML));
 app.use('/*', cors());
 
 // Bouncer personality modes
+// Voice ID mapping for each bouncer personality
+const VOICE_MAP = {
+  'Viktor': 'TxGEqnHWrfWFTfGW9XjX',       // Josh - Deep, gravelly, intimidating
+  'Zen-9': 'pqHfZKP75CvOlQylNhV4',        // Bill - Calm but authoritative, mature
+  'Maximus': 'IKne3meq5aSn9XLyUdCD',      // Charlie - Energetic, theatrical, Australian
+  'S.A.R.C.': 'XB0fDUnXU5powFXDhCwa',     // Charlotte - Sharp, sarcastic British
+  'Unit-7': 'onwK4e9ZLuTAKqWW03F9',       // Daniel - Tired, British, matter-of-fact
+  'BOUNCER': 'TxGEqnHWrfWFTfGW9XjX'       // Default fallback
+};
+
 const BOUNCER_PERSONALITIES = {
   classic: {
     name: 'Viktor',
@@ -992,40 +1003,47 @@ app.get('/health', (c) => {
 });
 
 app.post('/tts', async (c) => {
-  const { text } = await c.req.json();
+  try {
+    const { text, bouncerId } = await c.req.json();
 
-  if (!text) {
-    return c.json({ error: 'Text is required' }, 400);
-  }
-
-  const response = await fetch(
-    'https://api.elevenlabs.io/v1/text-to-speech/21m00Tcm4TlvDq8ikWAM',
-    {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'xi-api-key': c.env.ELEVENLABS_API_KEY,
-      },
-      body: JSON.stringify({
-        text: text,
-        model_id: 'eleven_monolingual_v1',
-        voice_settings: {
-          stability: 0.5,
-          similarity_boost: 0.5,
-        },
-      }),
+    if (!text) {
+      return c.json({ error: 'Text is required' }, 400);
     }
-  );
+    
+    if (!c.env.ELEVENLABS_API_KEY) {
+      return c.json({ error: 'TTS service is not configured' }, 500);
+    }
 
-  if (!response.ok) {
-    return c.json({ error: 'ElevenLabs API error' }, response.status as ContentfulStatusCode);
+    const elevenLabsClient = new ElevenLabsClient({
+      apiKey: c.env.ELEVENLABS_API_KEY,
+    });
+
+    const voiceId = VOICE_MAP[bouncerId as keyof typeof VOICE_MAP] || VOICE_MAP['BOUNCER'];
+
+    const audioStream = await elevenLabsClient.textToSpeech.convert(voiceId, {
+      text: text,
+      model_id: 'eleven_turbo_v2_5',
+      output_format: 'mp3_44100_128',
+      voice_settings: {
+        stability: 0.5,
+        similarity_boost: 0.75,
+      },
+    });
+
+    return new Response(audioStream as ReadableStream, {
+      headers: {
+        'Content-Type': 'audio/mpeg',
+        'Transfer-Encoding': 'chunked'
+      }
+    });
+
+  } catch (error: any) {
+    console.error('TTS error in Hono:', JSON.stringify(error, Object.getOwnPropertyNames(error)));
+    return c.json({
+      error: 'Text-to-speech conversion failed',
+      message: error.message,
+    }, 500);
   }
-
-  return new Response(response.body, {
-    headers: {
-      'Content-Type': 'audio/mpeg',
-    },
-  });
 });
 
 // Get bouncer personality
@@ -1194,6 +1212,47 @@ app.get('/stats', async (c) => {
     return c.json(stats);
   } catch (error) {
     return c.json({ error: 'Failed to get stats' }, 500);
+  }
+});
+
+app.post('/stt', async (c) => {
+  try {
+    if (!c.env.ELEVENLABS_API_KEY) {
+      console.error('STT Error: ELEVENLABS_API_KEY is not set on the server.');
+      return c.json({
+        error: 'Configuration error',
+        message: 'The speech-to-text service is not configured on the server.',
+      }, 500);
+    }
+
+    const formData = await c.req.formData();
+    const audioFile = formData.get('audio');
+
+    if (!audioFile || !(audioFile instanceof File)) {
+      return c.json({ error: 'No audio file provided' }, 400);
+    }
+    
+    const audioBuffer = await audioFile.arrayBuffer();
+
+    const elevenLabsClient = new ElevenLabsClient({
+      apiKey: c.env.ELEVENLABS_API_KEY,
+    });
+
+    const transcription = await elevenLabsClient.speechToText.convert({
+      audio: Buffer.from(audioBuffer),
+      model_id: 'eleven_multilingual_v2',
+    });
+
+    return c.json({
+      text: transcription.text || '',
+    });
+
+  } catch (error: any) {
+    console.error('STT error in Hono:', JSON.stringify(error, Object.getOwnPropertyNames(error)));
+    return c.json({
+      error: 'Speech-to-text conversion failed',
+      message: error.message,
+    }, 500);
   }
 });
 
