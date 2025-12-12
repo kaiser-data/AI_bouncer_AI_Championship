@@ -575,6 +575,14 @@
         >
           <span id="voiceBtnIcon">🎤</span>
         </button>
+        <button
+          id="voiceToggle"
+          class="cyber-btn-voice"
+          onclick="toggleVoiceResponses()"
+          title="Toggle voice responses"
+        >
+          <span id="voiceToggleIcon">🔇</span>
+        </button>
         <input
           type="text"
           id="messageInput"
@@ -1064,9 +1072,12 @@
     let analyser = null;
     let animationId = null;
     let audioPlayer = new Audio();
+    let voiceResponsesEnabled = false;
 
     const voiceBtn = document.getElementById('voiceBtn');
     const voiceBtnIcon = document.getElementById('voiceBtnIcon');
+    const voiceToggle = document.getElementById('voiceToggle');
+    const voiceToggleIcon = document.getElementById('voiceToggleIcon');
     const voiceWaveform = document.getElementById('voiceWaveform');
     const insightsPanel = document.getElementById('insightsPanel');
     const insightApproach = document.getElementById('insightApproach');
@@ -1214,12 +1225,39 @@
       }
     }
 
+    // Toggle voice responses
+    function toggleVoiceResponses() {
+      voiceResponsesEnabled = !voiceResponsesEnabled;
+
+      if (voiceResponsesEnabled) {
+        voiceToggleIcon.textContent = '🔊';
+        voiceToggle.classList.add('playing');
+        // Test audio playback to unlock autoplay
+        const testAudio = new Audio();
+        testAudio.play().catch(() => {
+          // Autoplay blocked, but user gesture captured
+        });
+      } else {
+        voiceToggleIcon.textContent = '🔇';
+        voiceToggle.classList.remove('playing');
+        // Stop any playing audio
+        if (!audioPlayer.paused) {
+          audioPlayer.pause();
+          audioPlayer.currentTime = 0;
+          bouncerAvatar.classList.remove('speaking');
+        }
+      }
+    }
+
     // Play bouncer response with TTS
     async function playBouncerResponse(text, bouncerId) {
+      // Only play if voice responses are enabled
+      if (!voiceResponsesEnabled) {
+        return;
+      }
+
       try {
         // Update UI
-        voiceBtn.classList.add('playing');
-        voiceBtnIcon.textContent = '🔊';
         bouncerAvatar.classList.add('speaking');
 
         const response = await fetch('https://ai-bouncer.01kbywmj78kdnw5zhm911hvk5k.lmapp.run/tts', {
@@ -1236,15 +1274,11 @@
         audioPlayer.src = audioUrl;
 
         audioPlayer.onended = () => {
-          voiceBtn.classList.remove('playing');
-          voiceBtnIcon.textContent = '🎤';
           bouncerAvatar.classList.remove('speaking');
           URL.revokeObjectURL(audioUrl);
         };
 
         audioPlayer.onerror = () => {
-          voiceBtn.classList.remove('playing');
-          voiceBtnIcon.textContent = '🎤';
           bouncerAvatar.classList.remove('speaking');
           console.error('Audio playback failed');
         };
@@ -1253,8 +1287,6 @@
 
       } catch (error) {
         console.error('TTS error:', error);
-        voiceBtn.classList.remove('playing');
-        voiceBtnIcon.textContent = '🎤';
         bouncerAvatar.classList.remove('speaking');
         // Silent fail - text is still displayed
       }
