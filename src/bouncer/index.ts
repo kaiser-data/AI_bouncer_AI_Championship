@@ -957,8 +957,12 @@ function getBouncerPrompt(attempts: number, personality: any) {
 function createS3Client(env: Env) {
   const endpoint = env.VULTR_ENDPOINT.startsWith('http') ? env.VULTR_ENDPOINT : `https://${env.VULTR_ENDPOINT}`;
 
+  // Extract region from the endpoint URL
+  const url = new URL(endpoint);
+  const region = url.hostname.split('.')[0]; // e.g., 'ams2' from 'ams2.vultrobjects.com'
+
   return new S3Client({
-    region: 'ewr1',
+    region: region, // Use the extracted region
     endpoint: endpoint,
     credentials: {
       accessKeyId: env.VULTR_ACCESS_KEY,
