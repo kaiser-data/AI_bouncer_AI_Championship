@@ -1,2 +1,42 @@
 [build]
   publish = "public"
+  functions = "functions"
+  command = "npm run build:functions"
+
+[[redirects]]
+  from = "/chat"
+  to = "/.netlify/functions/bouncer/chat"
+  status = 200
+
+[[redirects]]
+  from = "/bouncer"
+  to = "/.netlify/functions/bouncer/bouncer"
+  status = 200
+
+[[redirects]]
+  from = "/win"
+  to = "/.netlify/functions/bouncer/win"
+  status = 200
+
+[[redirects]]
+  from = "/leaderboard"
+  to = "/.netlify/functions/bouncer/leaderboard"
+  status = 200
+
+[[redirects]]
+  from = "/tts"
+  to = "/.netlify/functions/bouncer/tts"
+  status = 200
+
+[[redirects]]
+  from = "/stt"
+  to = "/.netlify/functions/bouncer/stt"
+  status = 200
+
+[functions]
+  # Configuration for serverless functions
+  node_bundler = "esbuild"
+
+  [functions."*"]
+    timeout = 120
+    external_node_modules = ["@aws-sdk/client-s3", "@elevenlabs/elevenlabs-js"]

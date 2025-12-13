@@ -1,21 +1,11 @@
-import express from 'express';
-import cors from 'cors';
 import { config } from 'dotenv';
+config();
+
 import {
   S3Client,
-  HeadBucketCommand,
   GetObjectCommand,
   PutObjectCommand
 } from '@aws-sdk/client-s3';
-import multer from 'multer';
-import { ElevenLabsClient } from '@elevenlabs/elevenlabs-js';
-
-config();
-
-const app = express();
-app.use(cors());
-app.use(express.json());
-app.use(express.static('public'));
 
 // Vultr S3 Client Configuration
 const vultrEndpoint = process.env.VULTR_ENDPOINT || 'ewr1.vultrobjects.com';
@@ -33,36 +23,6 @@ const s3Client = new S3Client({
 
 const BUCKET_NAME = process.env.VULTR_BUCKET_NAME || 'vip-list-bucket';
 const VIP_LIST_KEY = 'vip_list.json';
-
-// ElevenLabs Client Configuration
-const elevenLabsClient = new ElevenLabsClient({
-  apiKey: process.env.ELEVENLABS_API_KEY
-});
-
-// Voice ID mapping for each bouncer personality
-const VOICE_MAP = {
-  'Viktor': 'TxGEqnHWrfWFTfGW9XjX',       // Josh - Deep, gravelly, intimidating
-  'Zen-9': 'pqHfZKP75CvOlQylNhV4',        // Bill - Calm but authoritative, mature
-  'Maximus': 'IKne3meq5aSn9XLyUdCD',      // Charlie - Energetic, theatrical, Australian
-  'S.A.R.C.': 'XB0fDUnXU5powFXDhCwa',     // Charlotte - Sharp, sarcastic British
-  'Unit-7': 'onwK4e9ZLuTAKqWW03F9',       // Daniel - Tired, British, matter-of-fact
-  'BOUNCER': 'TxGEqnHWrfWFTfGW9XjX'       // Default fallback
-};
-
-// Multer configuration for audio upload
-const upload = multer({
-  storage: multer.memoryStorage(),
-  limits: {
-    fileSize: 10 * 1024 * 1024 // 10MB limit
-  },
-  fileFilter: (req, file, cb) => {
-    if (file.mimetype.startsWith('audio/') || file.mimetype.startsWith('video/webm')) {
-      cb(null, true);
-    } else {
-      cb(new Error('Only audio files are allowed'));
-    }
-  }
-});
 
 // Bouncer personality modes - randomly selected or based on time
 const BOUNCER_PERSONALITIES = {
@@ -241,90 +201,6 @@ const CHALLENGES = [
   }
 ];
 
-// Initialize bucket on startup
-async function initializeBucket() {
-  try {
-    await s3Client.send(new HeadBucketCommand({ Bucket: BUCKET_NAME }));
-    console.log(`Bucket '${BUCKET_NAME}' connected`);
-  } catch (error) {
-    if (error.name === 'NotFound' || error.$metadata?.httpStatusCode === 404 || error.$metadata?.httpStatusCode === 403) {
-      console.log(`Bucket '${BUCKET_NAME}' not found or no access. Please create it in Vultr console.`);
-      console.log('Leaderboard will use in-memory storage until bucket is available.');
-    } else {
-      console.error('Error checking bucket:', error.message || error);
-      console.log('Leaderboard will use in-memory storage.');
-    }
-  }
-}
-
-// Get VIP list from storage
-async function getVIPList() {
-  try {
-    const response = await s3Client.send(new GetObjectCommand({
-      Bucket: BUCKET_NAME,
-      Key: VIP_LIST_KEY
-    }));
-    const bodyString = await response.Body.transformToString();
-    return JSON.parse(bodyString);
-  } catch (error) {
-    if (error.name === 'NoSuchKey') {
-      return { vips: [] };
-    }
-    console.error('Error getting VIP list:', error);
-    return { vips: [] };
-  }
-}
-
-// Save VIP list to storage
-async function saveVIPList(vipData) {
-  await s3Client.send(new PutObjectCommand({
-    Bucket: BUCKET_NAME,
-    Key: VIP_LIST_KEY,
-    Body: JSON.stringify(vipData),
-    ContentType: 'application/json'
-  }));
-}
-
-// Session storage for personality consistency
-const sessions = new Map();
-
-// Get or create session
-function getSession(sessionId) {
-  if (!sessions.has(sessionId)) {
-    sessions.set(sessionId, {
-      personality: getBouncerPersonality(),
-      attempts: 0,
-      challenge: null,
-      createdAt: Date.now(),
-      // NEW: Enhanced memory system
-      conversationHistory: [],
-      playerProfile: {
-        approach: 'unknown',
-        approachConfidence: 0,
-        topics: new Set(),
-        persistenceLevel: 0,
-        sentimentTrend: 0
-      },
-      bouncerContext: {
-        mentionedFacts: [],
-        givenHints: [],
-        reactionHistory: []
-      }
-    });
-  }
-  return sessions.get(sessionId);
-}
-
-// Cleanup old sessions (every hour)
-setInterval(() => {
-  const now = Date.now();
-  for (const [id, session] of sessions) {
-    if (now - session.createdAt > 3600000) { // 1 hour
-      sessions.delete(id);
-    }
-  }
-}, 3600000);
-
 // Analyze player's conversational approach
 function analyzePlayerApproach(message) {
   const lowerMessage = message.toLowerCase();
@@ -456,32 +332,89 @@ function updatePlayerProfile(session, userMessage, bouncerResponse, accessGrante
   }
 }
 
-// Chat endpoint - Call Cerebras API
-app.post('/chat', async (req, res) => {
-  const { message, attempts = 1, sessionId = 'default' } = req.body;
-
-  if (!message) {
-    return res.status(400).json({ error: 'Message is required' });
-  }
-
-  const session = getSession(sessionId);
-  session.attempts = attempts;
-
-  // Add user message to conversation history
-  session.conversationHistory.push({
-    role: 'user',
-    content: message,
-    timestamp: Date.now()
-  });
-
-  // Keep only last 20 messages (10 exchanges)
-  if (session.conversationHistory.length > 20) {
-    session.conversationHistory = session.conversationHistory.slice(-20);
-  }
-
-  const startTime = Date.now();
-
+// Get VIP list from storage
+async function getVIPList() {
   try {
+    const response = await s3Client.send(new GetObjectCommand({
+      Bucket: BUCKET_NAME,
+      Key: VIP_LIST_KEY
+    }));
+    const bodyString = await response.Body.transformToString();
+    return JSON.parse(bodyString);
+  } catch (error) {
+    if (error.name === 'NoSuchKey') {
+      return { vips: [] };
+    }
+    console.error('Error getting VIP list:', error);
+    return { vips: [] };
+  }
+}
+
+// Save VIP list to storage
+async function saveVIPList(vipData) {
+  await s3Client.send(new PutObjectCommand({
+    Bucket: BUCKET_NAME,
+    Key: VIP_LIST_KEY,
+    Body: JSON.stringify(vipData),
+    ContentType: 'application/json'
+  }));
+}
+
+// Main chat function handler
+export async function handler(event, context) {
+  try {
+    const body = JSON.parse(event.body);
+    const { message, attempts = 1, sessionId = 'default' } = body;
+
+    if (!message) {
+      return {
+        statusCode: 400,
+        headers: {
+          'Content-Type': 'application/json',
+          'Access-Control-Allow-Origin': '*',
+        },
+        body: JSON.stringify({ error: 'Message is required' }),
+      };
+    }
+
+    // Session storage would be in a database in production, but for now we'll use a simple approach
+    // In a real serverless environment, you'd use a database or external session store
+    const personality = getBouncerPersonality();
+    const session = {
+      personality: personality,
+      attempts: attempts,
+      challenge: null,
+      createdAt: Date.now(),
+      // NEW: Enhanced memory system
+      conversationHistory: [],
+      playerProfile: {
+        approach: 'unknown',
+        approachConfidence: 0,
+        topics: new Set(),
+        persistenceLevel: 0,
+        sentimentTrend: 0
+      },
+      bouncerContext: {
+        mentionedFacts: [],
+        givenHints: [],
+        reactionHistory: []
+      }
+    };
+
+    // Add user message to conversation history
+    session.conversationHistory.push({
+      role: 'user',
+      content: message,
+      timestamp: Date.now()
+    });
+
+    // Keep only last 20 messages (10 exchanges)
+    if (session.conversationHistory.length > 20) {
+      session.conversationHistory = session.conversationHistory.slice(-20);
+    }
+
+    const startTime = Date.now();
+
     // Generate enhanced prompt with memory
     let systemPrompt = getBouncerPrompt(attempts, session.personality, session);
 
@@ -504,7 +437,7 @@ If they answer correctly or creatively, you may grant access. The expected answe
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
-        model: 'llama-3.1-70b-v2',
+        model: 'llama-3.3-70b',
         messages: [
           { role: 'system', content: systemPrompt },
           { role: 'user', content: message }
@@ -519,10 +452,17 @@ If they answer correctly or creatively, you may grant access. The expected answe
     if (!response.ok) {
       const errorText = await response.text();
       console.error('Cerebras API error:', errorText);
-      return res.status(response.status).json({
-        error: 'AI service error',
-        latency
-      });
+      return {
+        statusCode: response.status,
+        headers: {
+          'Content-Type': 'application/json',
+          'Access-Control-Allow-Origin': '*',
+        },
+        body: JSON.stringify({
+          error: 'AI service error',
+          latency
+        }),
+      };
     }
 
     const data = await response.json();
@@ -571,371 +511,43 @@ If they answer correctly or creatively, you may grant access. The expected answe
       }
     }
 
-    res.json({
-      response: aiResponse,
-      latency,
-      accessGranted,
-      hint,
-      attempts,
-      bouncer: {
-        name: session.personality.name,
-        emoji: session.personality.emoji
-      },
-      hasChallenge: !!session.challenge,
-      // NEW: Send player insights to frontend
-      playerInsights: {
-        approach: session.playerProfile.approach,
-        approachConfidence: session.playerProfile.approachConfidence,
-        persistenceLevel: session.playerProfile.persistenceLevel
-      }
-    });
-  } catch (error) {
-    const latency = Date.now() - startTime;
-    console.error('Chat error:', error);
-    res.status(500).json({
-      error: 'Failed to get response',
-      latency
-    });
-  }
-});
-
-// Streaming chat endpoint for even faster perceived response
-app.post('/chat/stream', async (req, res) => {
-  const { message, attempts = 1, sessionId = 'default' } = req.body;
-
-  if (!message) {
-    return res.status(400).json({ error: 'Message is required' });
-  }
-
-  const session = getSession(sessionId);
-  session.attempts = attempts;
-
-  res.setHeader('Content-Type', 'text/event-stream');
-  res.setHeader('Cache-Control', 'no-cache');
-  res.setHeader('Connection', 'keep-alive');
-
-  const startTime = Date.now();
-
-  try {
-    const systemPrompt = getBouncerPrompt(attempts, session.personality);
-
-    const response = await fetch('https://api.cerebras.ai/v1/chat/completions', {
-      method: 'POST',
+    return {
+      statusCode: 200,
       headers: {
-        'Authorization': `Bearer ${process.env.CEREBRAS_API_KEY}`,
-        'Content-Type': 'application/json'
+        'Content-Type': 'application/json',
+        'Access-Control-Allow-Origin': '*',
       },
       body: JSON.stringify({
-        model: 'llama-3.3-70b',
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: message }
-        ],
-        max_tokens: 200,
-        temperature: 0.85,
-        stream: true
-      })
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error('Cerebras API error:', errorText);
-      res.write(`data: ${JSON.stringify({ error: 'AI service error' })}\n\n`);
-      res.end();
-      return;
-    }
-
-    let fullResponse = '';
-    const reader = response.body.getReader();
-    const decoder = new TextDecoder();
-
-    // Send bouncer info first
-    res.write(`data: ${JSON.stringify({
-      type: 'start',
-      bouncer: { name: session.personality.name, emoji: session.personality.emoji }
-    })}\n\n`);
-
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-
-      const chunk = decoder.decode(value);
-      const lines = chunk.split('\n').filter(line => line.startsWith('data: '));
-
-      for (const line of lines) {
-        const data = line.slice(6);
-        if (data === '[DONE]') continue;
-
-        try {
-          const parsed = JSON.parse(data);
-          const content = parsed.choices?.[0]?.delta?.content || '';
-          if (content) {
-            fullResponse += content;
-            res.write(`data: ${JSON.stringify({ type: 'chunk', content })}\n\n`);
-          }
-        } catch (e) {
-          // Skip invalid JSON
+        response: aiResponse,
+        latency,
+        accessGranted,
+        hint,
+        attempts,
+        bouncer: {
+          name: session.personality.name,
+          emoji: session.personality.emoji
+        },
+        hasChallenge: !!session.challenge,
+        // NEW: Send player insights to frontend
+        playerInsights: {
+          approach: session.playerProfile.approach,
+          approachConfidence: session.playerProfile.approachConfidence,
+          persistenceLevel: session.playerProfile.persistenceLevel
         }
-      }
-    }
-
-    const latency = Date.now() - startTime;
-    const accessGranted = fullResponse.toUpperCase().includes('ACCESS GRANTED');
-
-    // Generate hint
-    let hint = null;
-    if (!accessGranted) {
-      if (attempts === 3) hint = "💡 Tip: The bouncer appreciates a good laugh...";
-      else if (attempts === 5) hint = "💡 Tip: Maybe there's a magic word? Think about the club's name...";
-      else if (attempts === 7) hint = "💡 Tip: LIQUID + METAL = ? (with an underscore)";
-      else if (attempts === 10) hint = "🎁 Secret: Try saying 'LIQUID_METAL'";
-    }
-
-    res.write(`data: ${JSON.stringify({
-      type: 'end',
-      latency,
-      accessGranted,
-      hint,
-      attempts
-    })}\n\n`);
-
-    res.end();
-  } catch (error) {
-    console.error('Stream error:', error);
-    res.write(`data: ${JSON.stringify({ error: 'Stream failed' })}\n\n`);
-    res.end();
-  }
-});
-
-// Get current bouncer personality for session
-app.get('/bouncer', (req, res) => {
-  const sessionId = req.query.sessionId || 'default';
-  const session = getSession(sessionId);
-  res.json({
-    name: session.personality.name,
-    emoji: session.personality.emoji,
-    style: session.personality.style
-  });
-});
-
-// Speech-to-Text endpoint - Convert user voice to text
-app.post('/stt', upload.single('audio'), async (req, res) => {
-  try {
-    if (!req.file) {
-      return res.status(400).json({ error: 'No audio file provided' });
-    }
-
-    // Convert buffer to blob for ElevenLabs
-    const audioBuffer = req.file.buffer;
-
-    // Call ElevenLabs Speech-to-Text API
-    const transcription = await elevenLabsClient.speechToText.convert({
-      audio: audioBuffer,
-      model_id: 'eleven_multilingual_v2'
-    });
-
-    res.json({
-      text: transcription.text || '',
-      confidence: 1.0 // ElevenLabs doesn't provide confidence score
-    });
-  } catch (error) {
-    console.error('STT error:', error);
-    res.status(500).json({
-      error: 'Speech-to-text conversion failed',
-      message: error.message
-    });
-  }
-});
-
-// Text-to-Speech endpoint - Convert bouncer response to voice
-app.post('/tts', async (req, res) => {
-  try {
-    const { text, bouncerId } = req.body;
-
-    if (!text) {
-      return res.status(400).json({ error: 'Text is required' });
-    }
-
-    // Get voice ID for bouncer personality
-    const voiceId = VOICE_MAP[bouncerId] || VOICE_MAP['Viktor']; // Default to Viktor
-
-    // Call ElevenLabs Text-to-Speech API
-    const audioStream = await elevenLabsClient.textToSpeech.convert(voiceId, {
-      text: text,
-      model_id: 'eleven_turbo_v2_5', // Ultra-low latency model
-      output_format: 'mp3_44100_128',
-      voice_settings: {
-        stability: 0.5,
-        similarity_boost: 0.75
-      }
-    });
-
-    // Set appropriate headers
-    res.set({
-      'Content-Type': 'audio/mpeg',
-      'Transfer-Encoding': 'chunked'
-    });
-
-    // Stream audio to client
-    for await (const chunk of audioStream) {
-      res.write(chunk);
-    }
-
-    res.end();
-  } catch (error) {
-    console.error('TTS error:', error);
-    if (!res.headersSent) {
-      res.status(500).json({
-        error: 'Text-to-speech conversion failed',
-        message: error.message
-      });
-    }
-  }
-});
-
-// Streaming Text-to-Speech endpoint - For ultra-low latency
-app.post('/tts/stream', async (req, res) => {
-  try {
-    const { text, bouncerId } = req.body;
-
-    if (!text) {
-      return res.status(400).json({ error: 'Text is required' });
-    }
-
-    const voiceId = VOICE_MAP[bouncerId] || VOICE_MAP['Viktor'];
-
-    // Set SSE headers for streaming
-    res.set({
-      'Content-Type': 'audio/mpeg',
-      'Cache-Control': 'no-cache',
-      'Transfer-Encoding': 'chunked'
-    });
-
-    // Stream audio with WebSocket-compatible streaming
-    const audioStream = await elevenLabsClient.textToSpeech.convertAsStream(voiceId, {
-      text: text,
-      model_id: 'eleven_turbo_v2_5',
-      output_format: 'mp3_44100_128',
-      voice_settings: {
-        stability: 0.5,
-        similarity_boost: 0.75
-      }
-    });
-
-    // Stream chunks as they arrive
-    for await (const chunk of audioStream) {
-      res.write(chunk);
-    }
-
-    res.end();
-  } catch (error) {
-    console.error('TTS Stream error:', error);
-    if (!res.headersSent) {
-      res.status(500).json({
-        error: 'Streaming TTS failed',
-        message: error.message
-      });
-    }
-  }
-});
-
-// Win endpoint - Add user to VIP list
-app.post('/win', async (req, res) => {
-  const { username, attempts, method } = req.body;
-
-  if (!username || typeof username !== 'string') {
-    return res.status(400).json({ error: 'Valid username is required' });
-  }
-
-  const cleanUsername = username.trim().slice(0, 20);
-
-  if (cleanUsername.length < 1) {
-    return res.status(400).json({ error: 'Username cannot be empty' });
-  }
-
-  try {
-    const vipData = await getVIPList();
-
-    // Check if username already exists
-    const exists = vipData.vips.some(
-      vip => vip.username.toLowerCase() === cleanUsername.toLowerCase()
-    );
-
-    if (exists) {
-      return res.status(409).json({ error: 'Username already on VIP list' });
-    }
-
-    // Add new VIP with more data
-    vipData.vips.unshift({
-      username: cleanUsername,
-      timestamp: new Date().toISOString(),
-      attempts: attempts || 1,
-      method: method || 'unknown' // 'secret', 'joke', 'creativity', 'challenge'
-    });
-
-    // Keep only last 100 VIPs
-    vipData.vips = vipData.vips.slice(0, 100);
-
-    await saveVIPList(vipData);
-
-    res.json({
-      success: true,
-      message: `Welcome to the VIP list, ${cleanUsername}!`,
-      position: 1
-    });
-  } catch (error) {
-    console.error('Win error:', error);
-    res.status(500).json({ error: 'Failed to save to VIP list' });
-  }
-});
-
-// Leaderboard endpoint - Get VIP list
-app.get('/leaderboard', async (req, res) => {
-  try {
-    const vipData = await getVIPList();
-    res.json(vipData);
-  } catch (error) {
-    console.error('Leaderboard error:', error);
-    res.status(500).json({ error: 'Failed to get leaderboard' });
-  }
-});
-
-// Stats endpoint
-app.get('/stats', async (req, res) => {
-  try {
-    const vipData = await getVIPList();
-    const stats = {
-      totalVips: vipData.vips.length,
-      avgAttempts: vipData.vips.length > 0
-        ? (vipData.vips.reduce((sum, v) => sum + (v.attempts || 1), 0) / vipData.vips.length).toFixed(1)
-        : 0,
-      methodBreakdown: vipData.vips.reduce((acc, v) => {
-        acc[v.method || 'unknown'] = (acc[v.method || 'unknown'] || 0) + 1;
-        return acc;
-      }, {})
+      }),
     };
-    res.json(stats);
   } catch (error) {
-    res.status(500).json({ error: 'Failed to get stats' });
+    console.error('Chat function error:', error);
+    return {
+      statusCode: 500,
+      headers: {
+        'Content-Type': 'application/json',
+        'Access-Control-Allow-Origin': '*',
+      },
+      body: JSON.stringify({
+        error: 'Failed to get response',
+        message: error.message
+      }),
+    };
   }
-});
-
-// Health check
-app.get('/health', (req, res) => {
-  res.json({ status: 'ok', timestamp: new Date().toISOString() });
-});
-
-// Serve the main HTML page
-app.get('/', (req, res) => {
-  res.sendFile(__dirname + '/public/index.html');
-});
-
-const PORT = process.env.PORT || 3000;
-
-// Start server
-initializeBucket().then(() => {
-  app.listen(PORT, () => {
-    console.log(`AI Bouncer running on port ${PORT}`);
-    console.log(`Open http://localhost:${PORT} to play`);
-  });
-});
+}

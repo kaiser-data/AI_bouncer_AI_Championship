@@ -1,4 +1,4 @@
-globalThis.__RAINDROP_GIT_COMMIT_SHA = "4a96f2a4b48ea7c2ad94ec8cb636f548972f8269"; 
+globalThis.__RAINDROP_GIT_COMMIT_SHA = "c84a9c1babb4da9e1bc6f8f403acbf7bd3be8471"; 
 var __defProp = Object.defineProperty;
 var __getOwnPropNames = Object.getOwnPropertyNames;
 var __esm = (fn, res) => function __init() {
@@ -19070,35 +19070,54 @@ var HTML = `
 var app = new Hono2();
 app.get("/", (c2) => c2.html(HTML));
 app.use("/*", cors2());
+var VOICE_MAP = {
+  "Viktor": "TxGEqnHWrfWFTfGW9XjX",
+  // Josh - Deep, gravelly, intimidating
+  "Zen-9": "pqHfZKP75CvOlQylNhV4",
+  // Bill - Calm but authoritative, mature
+  "Maximus": "IKne3meq5aSn9XLyUdCD",
+  // Charlie - Energetic, theatrical, Australian
+  "S.A.R.C.": "XB0fDUnXU5powFXDhCwa",
+  // Charlotte - Sharp, sarcastic British
+  "Unit-7": "onwK4e9ZLuTAKqWW03F9",
+  // Daniel - Tired, British, matter-of-fact
+  "BOUNCER": "TxGEqnHWrfWFTfGW9XjX"
+  // Default fallback
+};
 var BOUNCER_PERSONALITIES = {
   classic: {
     name: "Viktor",
     style: "The classic tough bouncer. Dismissive, brief, uses lots of cyberpunk slang.",
-    emoji: "\u{1F916}",
+    emoji: "[VIKTOR]",
+    // Placeholder
     slang: ["choom", "gonk", "preem", "nova", "corpo", "netrunner", "chrome"]
   },
   philosophical: {
     name: "Zen-9",
     style: "A philosophical bouncer who speaks in riddles and questions your worthiness on a deeper level.",
-    emoji: "\u{1F9D8}",
+    emoji: "[ZEN-9]",
+    // Placeholder
     slang: ["seeker", "wanderer", "unenlightened one", "digital pilgrim"]
   },
   dramatic: {
     name: "Maximus",
     style: "An overly dramatic bouncer who treats every interaction like a Shakespearean play.",
-    emoji: "\u{1F3AD}",
+    emoji: "[MAXIMUS]",
+    // Placeholder
     slang: ["mortal", "peasant", "fool", "brave soul", "unfortunate creature"]
   },
   sarcastic: {
     name: "S.A.R.C.",
     style: "Extremely sarcastic AI bouncer. Every response drips with irony and mock politeness.",
-    emoji: "\u{1F60F}",
+    emoji: "[S.A.R.C.]",
+    // Placeholder
     slang: ["genius", "Einstein", "champion", "superstar", "legend"]
   },
   tired: {
     name: "Unit-7",
     style: "An exhausted bouncer at the end of a long shift. Barely has energy to reject people.",
-    emoji: "\u{1F634}",
+    emoji: "[UNIT-7]",
+    // Placeholder
     slang: ["kid", "pal", "buddy", "friend", "another one"]
   }
 };
@@ -19178,13 +19197,16 @@ app.get("/health", (c2) => {
   return c2.json({ status: "ok", timestamp: (/* @__PURE__ */ new Date()).toISOString() });
 });
 app.post("/tts", async (c2) => {
-  const { text } = await c2.req.json();
-  if (!text) {
-    return c2.json({ error: "Text is required" }, 400);
-  }
-  const response = await fetch(
-    "https://api.elevenlabs.io/v1/text-to-speech/21m00Tcm4TlvDq8ikWAM",
-    {
+  try {
+    const { text, bouncerId } = await c2.req.json();
+    if (!text) {
+      return c2.json({ error: "Text is required" }, 400);
+    }
+    if (!c2.env.ELEVENLABS_API_KEY) {
+      return c2.json({ error: "TTS service is not configured" }, 500);
+    }
+    const voiceId = VOICE_MAP[bouncerId] || VOICE_MAP["BOUNCER"];
+    const response = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -19192,22 +19214,33 @@ app.post("/tts", async (c2) => {
       },
       body: JSON.stringify({
         text,
-        model_id: "eleven_monolingual_v1",
+        model_id: "eleven_turbo_v2_5",
+        // Use snake_case for direct API call
         voice_settings: {
+          // Use snake_case for direct API call
           stability: 0.5,
-          similarity_boost: 0.5
+          similarity_boost: 0.75
         }
       })
+    });
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error("ElevenLabs TTS API error:", errorText);
+      return c2.json({ error: "Text-to-speech API error", details: errorText }, response.status);
     }
-  );
-  if (!response.ok) {
-    return c2.json({ error: "ElevenLabs API error" }, response.status);
+    return new Response(response.body, {
+      headers: {
+        "Content-Type": "audio/mpeg",
+        "Transfer-Encoding": "chunked"
+      }
+    });
+  } catch (error) {
+    console.error("TTS error in Hono:", error.message);
+    return c2.json({
+      error: "Text-to-speech conversion failed",
+      message: error.message
+    }, 500);
   }
-  return new Response(response.body, {
-    headers: {
-      "Content-Type": "audio/mpeg"
-    }
-  });
 });
 app.get("/bouncer", (c2) => {
   const sessionId = c2.req.query("sessionId") || "default";
@@ -19336,6 +19369,43 @@ app.get("/stats", async (c2) => {
     return c2.json(stats);
   } catch (error) {
     return c2.json({ error: "Failed to get stats" }, 500);
+  }
+});
+app.post("/stt", async (c2) => {
+  try {
+    if (!c2.env.ELEVENLABS_API_KEY) {
+      return c2.json({ error: "STT service is not configured" }, 500);
+    }
+    const formData = await c2.req.formData();
+    const audioFile = formData.get("audio");
+    if (!audioFile) {
+      return c2.json({ error: "No audio file provided" }, 400);
+    }
+    const apiFormData = new FormData();
+    apiFormData.append("file", audioFile);
+    apiFormData.append("model_id", "scribe_v1");
+    const response = await fetch("https://api.elevenlabs.io/v1/speech-to-text", {
+      method: "POST",
+      headers: {
+        "xi-api-key": c2.env.ELEVENLABS_API_KEY
+      },
+      body: apiFormData
+    });
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error("ElevenLabs STT API error:", errorText);
+      return c2.json({ error: "Speech-to-text API error", details: errorText }, response.status);
+    }
+    const transcription = await response.json();
+    return c2.json({
+      text: transcription.text || ""
+    });
+  } catch (error) {
+    console.error("STT error in Hono:", error.message);
+    return c2.json({
+      error: "Speech-to-text conversion failed",
+      message: error.message
+    }, 500);
   }
 });
 var bouncer_default = class extends Service {

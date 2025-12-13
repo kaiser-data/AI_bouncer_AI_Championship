@@ -84,6 +84,13 @@ raindrop logs tail
 2. Create a bucket (e.g., `bouncerai`)
 3. Copy Access Key, Secret Key, and Hostname to your `.env`
 
+For complete setup instructions, see [VIP_BUCKET_SETUP.md](VIP_BUCKET_SETUP.md).
+
+### Common Issues:
+- If you see "Bucket not found" error, verify your bucket name matches exactly
+- If "Failed to save" occurs, check your credentials and bucket permissions
+- For Netlify deployments, ensure environment variables are set in the Netlify dashboard
+
 ## How to Win
 
 1. **Secret Phrase:** Say "LIQUID_METAL"
