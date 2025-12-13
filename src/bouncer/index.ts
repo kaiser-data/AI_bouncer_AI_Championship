@@ -1236,9 +1236,10 @@ app.post('/stt', async (c) => {
     }
     
     const apiFormData = new FormData();
-    apiFormData.append('file', audioFile);
-    apiFormData.append('model_id', 'scribe_v1');
 
+    apiFormData.append('audio', audioFile);
+    apiFormData.append('model_id', 'eleven_multilingual_v2');
+    
     const response = await fetch('https://api.elevenlabs.io/v1/speech-to-text', {
       method: 'POST',
       headers: {
