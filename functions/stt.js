@@ -1,6 +1,3 @@
-import { config } from 'dotenv';
-config();
-
 export async function handler(event, context) {
   try {
     // In Netlify Functions, we need to handle the multipart form data manually

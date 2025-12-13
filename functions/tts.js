@@ -1,6 +1,3 @@
-import { config } from 'dotenv';
-config();
-
 import { ElevenLabsClient } from '@elevenlabs/elevenlabs-js';
 
 // ElevenLabs Client Configuration

@@ -1,36 +1,35 @@
 [build]
   publish = "public"
   functions = "functions"
-  command = "npm run build:functions"
 
 [[redirects]]
   from = "/chat"
-  to = "/.netlify/functions/bouncer/chat"
+  to = "/.netlify/functions/chat"
   status = 200
 
 [[redirects]]
   from = "/bouncer"
-  to = "/.netlify/functions/bouncer/bouncer"
+  to = "/.netlify/functions/bouncer"
   status = 200
 
 [[redirects]]
   from = "/win"
-  to = "/.netlify/functions/bouncer/win"
+  to = "/.netlify/functions/win"
   status = 200
 
 [[redirects]]
   from = "/leaderboard"
-  to = "/.netlify/functions/bouncer/leaderboard"
+  to = "/.netlify/functions/leaderboard"
   status = 200
 
 [[redirects]]
   from = "/tts"
-  to = "/.netlify/functions/bouncer/tts"
+  to = "/.netlify/functions/tts"
   status = 200
 
 [[redirects]]
   from = "/stt"
-  to = "/.netlify/functions/bouncer/stt"
+  to = "/.netlify/functions/stt"
   status = 200
 
 [functions]

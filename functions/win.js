@@ -1,6 +1,3 @@
-import { config } from 'dotenv';
-config();
-
 import {
   S3Client,
   GetObjectCommand,
@@ -8,11 +5,11 @@ import {
 } from '@aws-sdk/client-s3';
 
 // Vultr S3 Client Configuration
-const vultrEndpoint = process.env.VULTR_ENDPOINT || 'ewr1.vultrobjects.com';
+const vultrEndpoint = process.env.VULTR_ENDPOINT || 'ams2.vultrobjects.com';
 const endpoint = vultrEndpoint.startsWith('http') ? vultrEndpoint : `https://${vultrEndpoint}`;
 
 const s3Client = new S3Client({
-  region: 'ewr1',
+  region: 'ams2',
   endpoint: endpoint,
   credentials: {
     accessKeyId: process.env.VULTR_ACCESS_KEY,
