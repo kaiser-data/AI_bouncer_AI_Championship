@@ -70,9 +70,17 @@ AI Bouncer is an interactive chat game where you face off against an AI-powered 
 
 ### 🎨 Cyberpunk UI
 - Neon-lit interface with glitch effects
-- Responsive design (mobile-friendly)
+- **Fully optimized mobile experience** with touch-friendly controls
 - Custom bouncer visuals for each personality
 - Real-time mood indicator
+
+### 📱 Mobile-Optimized Experience
+- **Touch-Friendly Controls** - 48-56px button targets (WCAG compliant)
+- **Responsive Layout** - Adaptive breakpoints for tablet (768px) and phone (480px)
+- **Smart Input Handling** - 16px font size prevents iOS auto-zoom
+- **Optimized Alignment** - Flexbox layout with proper element sizing
+- **Web App Ready** - Viewport configuration for seamless mobile experience
+- **Performance Tuned** - Reduced tap highlights, optimized spacing
 
 ---
 
@@ -89,16 +97,18 @@ AI Bouncer is an interactive chat game where you face off against an AI-powered 
 - **🎤 ElevenLabs STT** - Speech-to-text with `scribe_v2` model
 - **🔊 ElevenLabs TTS** - Natural voice synthesis with personality matching
 
-### Backend
+### Backend (Hybrid Architecture)
 - **Node.js 20** - Runtime environment
-- **Hono** - Lightweight web framework for Raindrop
+- **Hono** - Lightweight web framework for Raindrop (AI/voice endpoints)
+- **Netlify Functions** - Serverless functions for VIP list persistence
+- **@aws-sdk/client-s3** - Reliable S3 client for Vultr Object Storage
 - **Express** - Alternative server for local development
-- **aws4fetch** - S3 authentication for Cloudflare Workers
 
 ### Frontend
 - **HTML5 + Vanilla JavaScript** - No build step required
 - **Tailwind CSS** - Utility-first styling
 - **Custom Cyberpunk Design** - Neon effects and animations
+- **Responsive CSS** - Mobile-optimized with touch-friendly interactions
 
 ---
 
@@ -114,11 +124,18 @@ Watch the full demo and walkthrough on Vimeo:
 
 **[▶️ Watch on Vimeo](https://vimeo.com/1146107891)**
 
-### 🏗️ Architecture
+### 🏗️ Hybrid Architecture
 
 - **Frontend:** Netlify (auto-deploys from GitHub)
-- **Backend:** LiquidMetal Raindrop (Cloudflare Workers)
+- **AI/Voice Backend:** LiquidMetal Raindrop (Cerebras + ElevenLabs)
+- **VIP List Backend:** Netlify Functions (reliable S3 compatibility)
 - **Storage:** Vultr Object Storage (Amsterdam - `ams2`)
+
+**Why Hybrid?**
+- **Raindrop** provides ultra-low latency AI responses (<500ms) perfect for chat/voice
+- **Netlify Functions** offer better S3 compatibility with `@aws-sdk/client-s3`
+- **Issue discovered:** Raindrop's `aws4fetch` library has S3 signing incompatibility with Vultr
+- **Solution:** Use each platform's strengths - Raindrop for speed, Netlify for storage reliability
 
 ---
 
@@ -264,17 +281,22 @@ netlify deploy --prod --dir=public
 
 ## 🎯 API Endpoints
 
+### Raindrop Backend (Ultra-Low Latency)
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | `POST` | `/chat` | Send message, get bouncer response |
 | `POST` | `/chat/stream` | Streaming response for faster UX |
 | `GET` | `/bouncer` | Get current bouncer personality info |
-| `POST` | `/win` | Add username to VIP list |
-| `GET` | `/leaderboard` | Retrieve VIP leaderboard |
-| `GET` | `/stats` | Get game statistics |
 | `POST` | `/stt` | Speech-to-text conversion |
 | `POST` | `/tts` | Text-to-speech synthesis |
 | `GET` | `/health` | Health check endpoint |
+
+### Netlify Functions (VIP List Storage)
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `POST` | `/win` | Add username to VIP list (Vultr S3) |
+| `GET` | `/leaderboard` | Retrieve VIP leaderboard from storage |
+| `GET` | `/stats` | Get game statistics |
 
 ---
 
@@ -282,13 +304,31 @@ netlify deploy --prod --dir=public
 
 ### Leaderboard Not Working
 
-**Problem:** "Failed to save to VIP list"
+**Problem:** "Failed to save to VIP list" or 403 AccessDenied errors
 
-**Solutions:**
-1. Verify Vultr credentials in environment variables
-2. Check bucket name matches exactly
-3. Ensure access key has **read AND write** permissions
-4. Confirm endpoint URL is correct: `https://ams2.vultrobjects.com`
+**Root Causes & Solutions:**
+
+1. **IP Address Restrictions** (Most Common)
+   - Vultr allows IP whitelisting on access keys
+   - Cloudflare Workers have dynamic IPs, causing 403 errors
+   - **Solution:** Remove IP restrictions from Vultr Object Storage settings
+
+2. **S3 Signing Incompatibility with Raindrop**
+   - Raindrop uses `aws4fetch` library for S3 authentication
+   - This library has compatibility issues with Vultr's S3 implementation
+   - **Solution:** Use Netlify Functions with `@aws-sdk/client-s3` instead
+
+3. **Hybrid Architecture Implementation**
+   - Use Raindrop for AI/voice endpoints (ultra-low latency)
+   - Use Netlify Functions for `/win` and `/leaderboard` endpoints
+   - Frontend routes VIP list operations to Netlify Functions
+   - Frontend routes chat/STT/TTS to Raindrop backend
+
+4. **Traditional Issues:**
+   - Verify Vultr credentials in environment variables
+   - Check bucket name matches exactly: `bouncerai`
+   - Ensure access key has **read AND write** permissions
+   - Confirm endpoint URL is correct: `https://ams2.vultrobjects.com`
 
 ### Voice Features Not Working
 
